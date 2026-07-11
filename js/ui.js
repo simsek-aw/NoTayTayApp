@@ -43,6 +43,13 @@ function toast(msg) {
   }, 2200);
 }
 
+// Standard-Geburtsdatum: heute minus 8 Monate (Format YYYY-MM-DD)
+function defaultBirthDate() {
+  const d = new Date();
+  d.setMonth(d.getMonth() - 8);
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
 // datetime-local Wert aus Date
 function toLocalInput(d) {
   const dt = new Date(d);
@@ -58,6 +65,8 @@ export function render() {
 
   // Onboarding erzwingen, wenn kein Geburtsdatum
   if (!state.baby.birthDate) {
+    // Standard: Kind ist 8 Monate alt (dynamisch berechnet)
+    if (!$('ob-date').value) $('ob-date').value = defaultBirthDate();
     $('onboarding').hidden = false;
   }
 
@@ -67,7 +76,7 @@ export function render() {
   if (days != null) {
     const prof = ageProfile(state.baby.birthDate);
     const weeks = Math.floor(days / 7);
-    const ageStr = days < 90 ? `${weeks} Wo. (${days} T.)` : `${Math.floor(days / 30.44)} Mon.`;
+    const ageStr = days < 90 ? `${weeks} Wo. (${days} T.)` : `${Math.round(days / 30.44)} Mon.`;
     $('baby-age').textContent = `${ageStr} · ${prof.label}`;
   } else {
     $('baby-age').textContent = '';
