@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#1a1730" />
+  <meta name="description" content="Baby-Schlaf-Tracker — Nickerchen tracken und den nächsten Schlaf vorhersagen." />
+  <title>Schlummer — Baby Schlaf Tracker</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icons/favicon.png" sizes="any" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Schlummer" />
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <div id="app">
+    <!-- Kopfzeile -->
+    <header class="app-header">
+      <div class="baby-info">
+        <div class="baby-avatar" id="baby-avatar">🍼</div>
+        <div>
+          <div class="baby-name" id="baby-name">Baby</div>
+          <div class="baby-age" id="baby-age"></div>
+        </div>
+      </div>
+      <button class="icon-btn" id="settings-btn" aria-label="Einstellungen">⚙️</button>
+    </header>
+
+    <main class="app-main">
+      <!-- Großer Status: wach / schläft -->
+      <section class="status-card" id="status-card">
+        <div class="status-label" id="status-label">–</div>
+        <div class="status-timer" id="status-timer">00:00</div>
+        <div class="status-sub" id="status-sub"></div>
+      </section>
+
+      <!-- Aktionsbuttons -->
+      <section class="actions" id="actions"></section>
+
+      <!-- Nächste Vorhersage -->
+      <section class="card next-card" id="next-card" hidden>
+        <div class="card-title">Nächster Schlaf</div>
+        <div class="next-main">
+          <div class="next-icon" id="next-icon">😴</div>
+          <div class="next-body">
+            <div class="next-time" id="next-time">–</div>
+            <div class="next-desc" id="next-desc"></div>
+          </div>
+        </div>
+        <div class="next-meta" id="next-meta"></div>
+        <div class="confidence" id="confidence"></div>
+      </section>
+
+      <!-- Tagesplan -->
+      <section class="card plan-card" id="plan-card" hidden>
+        <div class="card-title">Plan für den Tag</div>
+        <ul class="timeline" id="timeline"></ul>
+        <div class="plan-hint">Prognose auf Basis von Alter &amp; deinen bisherigen Aufzeichnungen.</div>
+      </section>
+
+      <!-- Verlauf -->
+      <section class="card history-card" id="history-card">
+        <div class="card-title">Verlauf</div>
+        <ul class="history" id="history"></ul>
+        <div class="empty-history" id="empty-history">Noch keine Einträge. Starte das erste Nickerchen!</div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Onboarding -->
+  <div class="overlay" id="onboarding" hidden>
+    <div class="sheet">
+      <h2>Willkommen 👶</h2>
+      <p class="muted">Für möglichst genaue Vorhersagen brauchen wir das Geburtsdatum.</p>
+      <label>Name des Babys
+        <input type="text" id="ob-name" placeholder="z. B. Emma" />
+      </label>
+      <label>Geburtsdatum
+        <input type="date" id="ob-date" />
+      </label>
+      <button class="btn btn-primary btn-block" id="ob-save">Los geht's</button>
+    </div>
+  </div>
+
+  <!-- Einstellungen -->
+  <div class="overlay" id="settings" hidden>
+    <div class="sheet">
+      <div class="sheet-head">
+        <h2>Einstellungen</h2>
+        <button class="icon-btn" id="settings-close" aria-label="Schließen">✕</button>
+      </div>
+      <label>Name
+        <input type="text" id="set-name" />
+      </label>
+      <label>Geburtsdatum
+        <input type="date" id="set-date" />
+      </label>
+      <div class="settings-actions">
+        <button class="btn" id="export-btn">Daten exportieren</button>
+        <button class="btn" id="import-btn">Daten importieren</button>
+        <input type="file" id="import-file" accept="application/json" hidden />
+        <button class="btn btn-danger" id="clear-btn">Alle Daten löschen</button>
+      </div>
+      <p class="muted small">Alle Daten werden nur lokal auf diesem Gerät gespeichert.</p>
+    </div>
+  </div>
+
+  <!-- Manueller Eintrag / Zeit anpassen -->
+  <div class="overlay" id="manual" hidden>
+    <div class="sheet">
+      <div class="sheet-head">
+        <h2 id="manual-title">Eintrag</h2>
+        <button class="icon-btn" id="manual-close" aria-label="Schließen">✕</button>
+      </div>
+      <label>Art
+        <select id="man-type">
+          <option value="nap">Nickerchen</option>
+          <option value="night">Nachtschlaf</option>
+        </select>
+      </label>
+      <label>Beginn
+        <input type="datetime-local" id="man-start" />
+      </label>
+      <label id="man-end-wrap">Ende <span class="muted small">(leer = läuft noch)</span>
+        <input type="datetime-local" id="man-end" />
+      </label>
+      <div class="sheet-actions">
+        <button class="btn btn-danger" id="man-delete" hidden>Löschen</button>
+        <button class="btn btn-primary" id="man-save">Speichern</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" hidden></div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
