@@ -1,0 +1,18 @@
+{
+  "name": "Schlummer — Baby Schlaf Tracker",
+  "short_name": "Schlummer",
+  "description": "Nickerchen tracken und den nächsten Schlaf sowie die Schlafenszeit vorhersagen.",
+  "lang": "de",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#1a1730",
+  "theme_color": "#1a1730",
+  "categories": ["health", "lifestyle", "parenting"],
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
