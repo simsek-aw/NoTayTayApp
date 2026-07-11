@@ -97,6 +97,36 @@
       <label>Geburtsdatum
         <input type="date" id="set-date" />
       </label>
+
+      <!-- Familien-Sync -->
+      <div class="sync-box">
+        <div class="sync-head">
+          <span>👨‍👩‍👧 Familien-Sync</span>
+          <span class="sync-badge" id="sync-badge">aus</span>
+        </div>
+        <p class="muted small" id="sync-intro">Gebt auf beiden Handys denselben Code ein — dann seht Mama &amp; Papa live dieselben Daten.</p>
+
+        <div id="sync-setup">
+          <label>Familien-Code
+            <input type="text" id="sync-code" placeholder="Code eingeben oder erzeugen" autocomplete="off" autocapitalize="characters" />
+          </label>
+          <div class="sync-btns">
+            <button class="btn" id="sync-gen">🎲 Code erzeugen</button>
+            <button class="btn btn-primary" id="sync-connect">Verbinden</button>
+          </div>
+        </div>
+
+        <div id="sync-connected" hidden>
+          <div class="sync-code-display">Code: <strong id="sync-code-shown"></strong></div>
+          <div class="sync-btns">
+            <button class="btn" id="sync-copy">📋 Code kopieren</button>
+            <button class="btn btn-danger" id="sync-disconnect">Sync trennen</button>
+          </div>
+        </div>
+
+        <p class="muted small" id="sync-unavailable" hidden>⚠️ Sync ist noch nicht konfiguriert (Firebase-Zugang fehlt).</p>
+      </div>
+
       <div class="settings-actions">
         <button class="btn" id="export-btn">Daten exportieren</button>
         <button class="btn" id="import-btn">Daten importieren</button>

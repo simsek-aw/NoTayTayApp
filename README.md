@@ -45,8 +45,9 @@ abhängig davon, wie viele passende Aufzeichnungen vorliegen.
 | 🌅 **Nächster Schlaf** | Vorhergesagte Uhrzeit + ideales Zeitfenster |
 | 📋 **Tagesplan** | Vorschau aller verbleibenden Schlafphasen |
 | 📖 **Verlauf** | Alle Einträge, bearbeitbar & löschbar |
+| 👨‍👩‍👧 **Familien-Sync** | Optional: Mama & Papa sehen per Familien-Code live dieselben Daten |
 | 📴 **Offline** | Funktioniert komplett ohne Internet (Service Worker) |
-| 🔒 **Privat** | Alle Daten nur lokal auf dem Gerät (localStorage) |
+| 🔒 **Privat** | Standardmäßig nur lokal (localStorage); Cloud nur bei aktivem Sync |
 
 ---
 
@@ -75,6 +76,49 @@ der Service Worker aktiv wird.
 
 ---
 
+## Familien-Sync einrichten (optional)
+
+Damit **beide Elternteile live dieselben Daten** sehen, nutzt die App einen
+kostenlosen **Firebase-(Firestore-)** Speicher. Die Einrichtung ist einmalig:
+
+### 1. Firebase-Projekt anlegen
+1. Auf **https://console.firebase.google.com** mit einem Google-Konto anmelden.
+2. **„Projekt hinzufügen"** → Namen vergeben (z. B. „schlummer") → erstellen.
+
+### 2. Firestore-Datenbank aktivieren
+1. Linkes Menü → **Build → Firestore Database** → **„Datenbank erstellen"**.
+2. Modus **„Produktion"** wählen, eine Region (z. B. `eur3` / Europa) auswählen.
+
+### 3. Anonyme Anmeldung aktivieren
+1. Linkes Menü → **Build → Authentication** → **„Los geht's"**.
+2. Reiter **„Sign-in method"** → **„Anonym"** aktivieren.
+
+### 4. Sicherheitsregeln setzen
+Unter **Firestore → Regeln** folgenden Inhalt einfügen und veröffentlichen:
+```
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /families/{code}/{document=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}
+```
+Nur angemeldete App-Nutzer mit dem geheimen Familien-Code kommen so an die Daten.
+
+### 5. Zugangsdaten eintragen
+1. **Projektübersicht (Zahnrad) → Projekteinstellungen → Deine Apps → Web-App** (`</>`)
+   hinzufügen. Firebase zeigt dann ein `firebaseConfig`-Objekt an.
+2. Diese Werte in **`js/firebase-config.js`** eintragen (sie sind nicht geheim).
+
+### 6. Verbinden
+In der App: **⚙️ → Familien-Sync → Code erzeugen → Verbinden.** Denselben Code
+auf dem zweiten Handy eingeben – fertig. Ab jetzt synchronisiert sich alles live.
+
+> Bei aktivem Sync liegen die Daten (verschlüsselt) bei Firebase statt nur lokal.
+> Ohne Sync bleibt die App komplett offline und lokal.
+
 ## Projektstruktur
 
 ```
@@ -84,9 +128,11 @@ sw.js                   Service Worker (Offline-Cache)
 css/styles.css          Styling (Nacht-Theme, mobil-first)
 js/
   engine.js             Vorhersage-Engine (Wachfenster + Personalisierung)
-  store.js              Datenhaltung & localStorage
+  store.js              Datenhaltung & localStorage (+ Sync-Anbindung)
   ui.js                 Rendering & Interaktion
-  app.js               Bootstrap + Service-Worker-Registrierung
+  app.js                Bootstrap + Service-Worker-Registrierung
+  sync.js               Familien-Sync über Firebase Firestore
+  firebase-config.js    Firebase-Zugangsdaten (für den Sync einzutragen)
 icons/                  App-Icons (Mondsichel)
 scripts/gen-icons.mjs   Generiert die PNG-Icons neu (node scripts/gen-icons.mjs)
 ```

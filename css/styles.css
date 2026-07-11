@@ -185,6 +185,28 @@ body {
 .small { font-size: 12px; }
 .muted.small { margin-top: 14px; }
 
+/* ---- Familien-Sync ---- */
+.sync-box {
+  margin-top: 20px; padding: 16px; border-radius: 16px;
+  background: rgba(0,0,0,0.18); border: 1px solid var(--line);
+}
+.sync-head {
+  display: flex; align-items: center; justify-content: space-between;
+  font-weight: 700; font-size: 15px; margin-bottom: 6px;
+}
+.sync-badge {
+  font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px;
+  background: rgba(167,161,201,0.18); color: var(--muted); text-transform: uppercase; letter-spacing: .5px;
+}
+.sync-badge.badge-ok { background: rgba(107,226,166,0.18); color: var(--good); }
+.sync-badge.badge-warn { background: rgba(255,206,107,0.18); color: var(--awake); }
+.sync-badge.badge-err { background: rgba(255,122,138,0.18); color: var(--danger); }
+.sync-btns { display: flex; gap: 10px; margin-top: 10px; }
+.sync-btns .btn { flex: 1; }
+.sync-code-display { font-size: 14px; color: var(--muted); margin-top: 4px; }
+.sync-code-display strong { color: var(--text); font-variant-numeric: tabular-nums; letter-spacing: 1px; }
+#sync-code { text-transform: uppercase; letter-spacing: 1px; }
+
 /* ---- Toast ---- */
 .toast {
   position: fixed; bottom: calc(24px + env(safe-area-inset-bottom)); left: 50%;

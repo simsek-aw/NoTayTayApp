@@ -50,6 +50,55 @@ function defaultBirthDate() {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
+// Zufälligen, gut lesbaren Familien-Code erzeugen (keine mehrdeutigen Zeichen)
+function genFamilyCode() {
+  const alpha = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const bytes = crypto.getRandomValues(new Uint8Array(12));
+  let s = '';
+  bytes.forEach((b) => { s += alpha[b % alpha.length]; });
+  return s.match(/.{1,4}/g).join('-'); // z. B. K7QF-M3PX-9RTA
+}
+
+// Sync-Status im Einstellungen-Menü anzeigen
+function updateSyncUI(status, detail) {
+  const badge = $('sync-badge');
+  const setup = $('sync-setup');
+  const conn = $('sync-connected');
+  const unavailable = $('sync-unavailable');
+  const intro = $('sync-intro');
+
+  if (!store.syncAvailable()) {
+    unavailable.hidden = false;
+    setup.hidden = true;
+    conn.hidden = true;
+    intro.hidden = true;
+    badge.textContent = 'n/v';
+    badge.className = 'sync-badge';
+    return;
+  }
+  unavailable.hidden = true;
+  intro.hidden = false;
+
+  const map = {
+    connecting: ['verbindet…', 'badge-warn'],
+    connected: ['verbunden', 'badge-ok'],
+    error: ['Fehler', 'badge-err'],
+    disconnected: ['aus', ''],
+    unavailable: ['n/v', ''],
+  };
+  const [label, cls] = map[status] || ['aus', ''];
+  badge.textContent = label;
+  badge.className = 'sync-badge ' + cls;
+
+  const isConn = status === 'connected';
+  conn.hidden = !isConn;
+  setup.hidden = isConn;
+  if (isConn) {
+    $('sync-code-shown').textContent = store.getFamilyCode() || '';
+  }
+  if (status === 'error' && detail) toast('Sync-Fehler: ' + detail);
+}
+
 // datetime-local Wert aus Date
 function toLocalInput(d) {
   const dt = new Date(d);
@@ -304,7 +353,29 @@ export function bindEvents() {
     const b = store.get().baby;
     $('set-name').value = b.name || '';
     $('set-date').value = b.birthDate || '';
+    $('sync-code').value = store.getFamilyCode() || '';
+    updateSyncUI(store.syncConnected() ? 'connected' : 'disconnected');
     $('settings').hidden = false;
+  };
+
+  // ---- Familien-Sync ----
+  $('sync-gen').onclick = () => { $('sync-code').value = genFamilyCode(); };
+  $('sync-connect').onclick = async () => {
+    const code = ($('sync-code').value || '').trim().toUpperCase();
+    if (code.length < 6) { toast('Bitte einen gültigen Code eingeben (oder erzeugen)'); return; }
+    updateSyncUI('connecting');
+    const ok = await store.connectSync(code, (status, detail) => updateSyncUI(status, detail));
+    if (ok) { toast('Familien-Sync verbunden ✅'); render(); }
+  };
+  $('sync-copy').onclick = async () => {
+    const code = store.getFamilyCode() || '';
+    try { await navigator.clipboard.writeText(code); toast('Code kopiert 📋'); }
+    catch { toast('Code: ' + code); }
+  };
+  $('sync-disconnect').onclick = () => {
+    store.disconnectSync();
+    updateSyncUI('disconnected');
+    toast('Sync getrennt (Daten bleiben lokal erhalten)');
   };
   $('settings-close').onclick = () => $('settings').hidden = true;
   $('set-name').onchange = () => store.setBaby({ name: $('set-name').value.trim() });
