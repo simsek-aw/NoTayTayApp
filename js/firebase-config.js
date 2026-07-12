@@ -10,12 +10,12 @@
 //  ganz normal rein lokal weiter.
 // ============================================================================
 export const firebaseConfig = {
-  apiKey: '',
-  authDomain: '',
-  projectId: '',
-  storageBucket: '',
-  messagingSenderId: '',
-  appId: '',
+  apiKey: 'AIzaSyC7ZPHE7gOsMSdbkSuGVJ8bh-hH78MD574',
+  authDomain: 'notaytay-4e38b.firebaseapp.com',
+  projectId: 'notaytay-4e38b',
+  storageBucket: 'notaytay-4e38b.firebasestorage.app',
+  messagingSenderId: '787886665571',
+  appId: '1:787886665571:web:3cfab2605b0462ed68ad56',
 };
 
 // Sync ist verfügbar, sobald ein Projekt eingetragen ist.
