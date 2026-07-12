@@ -3,6 +3,7 @@
 // ============================================================================
 import { store } from './store.js';
 import { predict, ageProfile, ageInDays, fmtDuration } from './engine.js';
+import * as notify from './notify.js';
 
 const $ = (id) => document.getElementById(id);
 const pad = (n) => String(n).padStart(2, '0');
@@ -99,6 +100,28 @@ function updateSyncUI(status, detail) {
   if (status === 'error' && detail) toast('Sync-Fehler: ' + detail);
 }
 
+// Status der Erinnerungen im Einstellungen-Menü anzeigen
+function updateNotifyUI() {
+  const badge = $('notify-badge');
+  const enableBtn = $('notify-enable');
+  const disableBtn = $('notify-disable');
+  const unavailable = $('notify-unavailable');
+  if (!notify.notifySupported()) {
+    unavailable.hidden = false;
+    enableBtn.hidden = true;
+    disableBtn.hidden = true;
+    badge.textContent = 'n/v';
+    badge.className = 'sync-badge';
+    return;
+  }
+  unavailable.hidden = true;
+  const on = notify.notifyEnabled();
+  badge.textContent = on ? 'an' : 'aus';
+  badge.className = 'sync-badge ' + (on ? 'badge-ok' : '');
+  enableBtn.hidden = on;
+  disableBtn.hidden = !on;
+}
+
 // datetime-local Wert aus Date
 function toLocalInput(d) {
   const dt = new Date(d);
@@ -137,6 +160,7 @@ export function render() {
   renderNext(pred);
   renderPlan(pred);
   renderHistory();
+  notify.schedule(pred.prediction);
 }
 
 function renderStatus(pred) {
@@ -215,21 +239,38 @@ function renderNext(pred) {
   card.hidden = false;
   const p = pred.prediction;
 
+  const adjust = $('next-adjust');
+  adjust.hidden = true;
+
   if (p.kind === 'wake') {
     $('next-icon').textContent = '🌅';
     $('next-time').textContent = fmtClock(p.time);
     $('next-desc').textContent = p.label + (p.napNumber ? ` · ${p.napNumber}. Nickerchen läuft` : '');
     $('next-meta').textContent = `Fenster ${fmtTime(p.rangeStart)}–${fmtTime(p.rangeEnd)} Uhr`;
+    $('cd-label').textContent = 'bis zum Aufwachen';
   } else {
     $('next-icon').textContent = p.type === 'night' ? '🌙' : '😴';
     $('next-time').textContent = fmtClock(p.time);
-    const now = new Date();
-    const mins = Math.round((p.time - now) / 60000);
-    const inTxt = mins > 0 ? `in ${fmtDuration(mins)}` : `jetzt (überfällig ${fmtDuration(-mins)})`;
-    $('next-desc').textContent = `${p.label} · ${inTxt}`;
+    $('next-desc').textContent = p.label;
     $('next-meta').textContent =
       `Wachfenster ${fmtDuration(p.wakeWindow)} · ideales Fenster ${fmtTime(p.rangeStart)}–${fmtTime(p.rangeEnd)} Uhr`;
+    $('cd-label').textContent = p.type === 'night' ? 'bis zur Schlafenszeit' : 'bis zum Nickerchen';
+
+    // Hinweis auf Übermüdungs-Korrektur
+    if (p.adjustment === 'short') {
+      adjust.hidden = false;
+      adjust.textContent = '⚡ Wachfenster verkürzt – das letzte Nickerchen war kurz.';
+    } else if (p.adjustment === 'long') {
+      adjust.hidden = false;
+      adjust.textContent = '💤 Wachfenster etwas verlängert – das letzte Nickerchen war besonders lang.';
+    }
   }
+
+  // Live-Countdown vorbereiten
+  const cd = $('next-countdown');
+  cd.hidden = false;
+  cd.dataset.target = p.time.toISOString();
+  updateCountdown();
 
   const conf = $('confidence');
   const level = p.confidence;
@@ -332,6 +373,26 @@ function tickTimer() {
   if (t && t.dataset.since) {
     t.textContent = elapsed(new Date(t.dataset.since));
   }
+  updateCountdown();
+}
+
+// Live-Countdown bis zur nächsten Schlaf-/Aufwachzeit aktualisieren
+function updateCountdown() {
+  const cd = $('next-countdown');
+  if (!cd || cd.hidden || !cd.dataset.target) return;
+  const diff = new Date(cd.dataset.target) - new Date();
+  const val = $('cd-value');
+  if (diff <= 0) {
+    val.textContent = 'jetzt';
+    cd.classList.add('cd-now');
+    return;
+  }
+  cd.classList.remove('cd-now');
+  const s = Math.floor(diff / 1000);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  val.textContent = h > 0 ? `${h}:${pad(m)}:${pad(sec)}` : `${m}:${pad(sec)}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -355,7 +416,21 @@ export function bindEvents() {
     $('set-date').value = b.birthDate || '';
     $('sync-code').value = store.getFamilyCode() || '';
     updateSyncUI(store.syncConnected() ? 'connected' : 'disconnected');
+    updateNotifyUI();
     $('settings').hidden = false;
+  };
+
+  // ---- Erinnerungen ----
+  $('notify-enable').onclick = async () => {
+    const ok = await notify.enableNotifications();
+    updateNotifyUI();
+    toast(ok ? 'Erinnerungen aktiviert 🔔' : 'Benachrichtigungen wurden abgelehnt');
+    if (ok) render(); // sofort für die aktuelle Prognose planen
+  };
+  $('notify-disable').onclick = () => {
+    notify.disableNotifications();
+    updateNotifyUI();
+    toast('Erinnerungen ausgeschaltet');
   };
 
   // ---- Familien-Sync ----

@@ -113,13 +113,17 @@ export function buildCycles(sessions) {
   return cycles;
 }
 
-// Mittelwert eines Arrays (jüngere Zyklen stärker gewichtet)
+// Mittelwert eines Arrays mit AKTUALITÄTS-/TREND-Gewichtung.
+// Werte sind chronologisch (ältester zuerst). Neuere Tage werden exponentiell
+// stärker gewichtet – so folgt die Prognose automatisch dem Trend (z. B. länger
+// werdende Wachfenster bei Wachstum), statt alte Tage gleich stark zu zählen.
 function weightedMean(values) {
   if (!values.length) return null;
+  const base = 1.6; // >1 = neuere Werte dominieren
   let num = 0;
   let den = 0;
   values.forEach((v, i) => {
-    const w = i + 1; // spätere (neuere) Einträge stärker
+    const w = Math.pow(base, i);
     num += v * w;
     den += w;
   });
@@ -269,7 +273,22 @@ export function predict(sessions, birthDate, now = new Date()) {
   const wwIndex = Math.min(napsToday, windows.length - 1);
   const isNight = napsToday >= napTarget;
   const ww = windows[wwIndex];
-  const onset = new Date(lastWake.getTime() + ww.minutes * MIN);
+
+  // Übermüdungs-Korrektur: War das zuletzt beendete Nickerchen deutlich zu kurz,
+  // ist das Baby eher übermüdet -> nächstes Wachfenster verkürzen (früher schlafen).
+  // War es besonders lang/erholsam, kann es minimal länger wach bleiben.
+  let adjMinutes = ww.minutes;
+  let adjustment = null;
+  if (lastSession && lastSession.type === 'nap' && napsToday > 0) {
+    const lastNapDur = (new Date(lastSession.end) - new Date(lastSession.start)) / MIN;
+    const expected = napDurs[Math.min(napsToday - 1, napDurs.length - 1)].minutes;
+    if (expected > 0) {
+      const ratio = lastNapDur / expected;
+      if (ratio < 0.7) { adjMinutes = Math.round(ww.minutes * 0.85); adjustment = 'short'; }
+      else if (ratio > 1.3) { adjMinutes = Math.round(ww.minutes * 1.05); adjustment = 'long'; }
+    }
+  }
+  const onset = new Date(lastWake.getTime() + adjMinutes * MIN);
 
   result.status = 'awake';
   result.lastWake = lastWake;
@@ -279,7 +298,9 @@ export function predict(sessions, birthDate, now = new Date()) {
     time: onset,
     rangeStart: new Date(onset.getTime() - (isNight ? 20 : 15) * MIN),
     rangeEnd: new Date(onset.getTime() + (isNight ? 20 : 15) * MIN),
-    wakeWindow: ww.minutes,
+    wakeWindow: adjMinutes,
+    baseWakeWindow: ww.minutes,
+    adjustment, // 'short' | 'long' | null
     confidence: confidenceFrom(ww.samples),
     napNumber: isNight ? null : napsToday + 1,
     label: isNight ? 'Schlafenszeit (Nacht)' : `${napsToday + 1}. Nickerchen`,

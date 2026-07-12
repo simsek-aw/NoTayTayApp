@@ -49,6 +49,11 @@
             <div class="next-desc" id="next-desc"></div>
           </div>
         </div>
+        <div class="next-countdown" id="next-countdown" hidden>
+          <span class="cd-label" id="cd-label">bis zum nächsten Schlaf</span>
+          <span class="cd-value" id="cd-value">–</span>
+        </div>
+        <div class="next-adjust" id="next-adjust" hidden></div>
         <div class="next-meta" id="next-meta"></div>
         <div class="confidence" id="confidence"></div>
       </section>
@@ -125,6 +130,20 @@
         </div>
 
         <p class="muted small" id="sync-unavailable" hidden>⚠️ Sync ist noch nicht konfiguriert (Firebase-Zugang fehlt).</p>
+      </div>
+
+      <!-- Erinnerungen -->
+      <div class="sync-box">
+        <div class="sync-head">
+          <span>🔔 Erinnerungen</span>
+          <span class="sync-badge" id="notify-badge">aus</span>
+        </div>
+        <p class="muted small">Benachrichtigung 30 Minuten vor der nächsten Schlafphase.</p>
+        <div class="sync-btns">
+          <button class="btn btn-primary" id="notify-enable">Erinnerungen aktivieren</button>
+          <button class="btn" id="notify-disable" hidden>Ausschalten</button>
+        </div>
+        <p class="muted small" id="notify-unavailable" hidden>⚠️ Dieses Gerät/dieser Browser unterstützt keine Benachrichtigungen.</p>
       </div>
 
       <div class="settings-actions">

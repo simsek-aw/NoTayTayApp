@@ -116,6 +116,21 @@ body {
 .next-icon { font-size: 40px; }
 .next-time { font-size: 30px; font-weight: 800; letter-spacing: -.5px; }
 .next-desc { font-size: 14px; color: var(--muted); margin-top: 2px; }
+.next-countdown {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+  margin-top: 14px; padding: 12px 14px; border-radius: 14px;
+  background: rgba(139,123,255,0.12); border: 1px solid rgba(139,123,255,0.25);
+}
+.cd-label { font-size: 13px; color: var(--muted); font-weight: 600; }
+.cd-value {
+  font-size: 26px; font-weight: 800; letter-spacing: -.5px; color: var(--accent-2);
+  font-variant-numeric: tabular-nums;
+}
+.next-countdown.cd-now .cd-value { color: var(--awake); font-size: 22px; }
+.next-adjust {
+  margin-top: 10px; font-size: 13px; font-weight: 600; color: var(--awake);
+  background: rgba(255,206,107,0.10); border-radius: 10px; padding: 8px 12px;
+}
 .next-meta { font-size: 13px; color: var(--muted); margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
 .confidence { display: inline-block; margin-top: 10px; font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 999px; }
 .conf-high { background: rgba(107,226,166,0.16); color: var(--good); }
