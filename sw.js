@@ -1,7 +1,7 @@
 // ============================================================================
 //  Service Worker — Offline-Cache (App-Shell)
 // ============================================================================
-const CACHE = 'schlummer-v2';
+const CACHE = 'schlummer-v3';
 const ASSETS = [
   './',
   './index.html',
@@ -38,16 +38,15 @@ self.addEventListener('fetch', (e) => {
   // die brauchen direkten Netzwerkzugriff (u. a. WebSockets/Long-Polling).
   const url = new URL(e.request.url);
   if (url.origin !== self.location.origin) return;
+  // Netzwerk zuerst: online immer die aktuelle Version (Updates von Code &
+  // Config setzen sich sofort durch); offline dient der Cache als Fallback.
   e.respondWith(
-    caches.match(e.request).then((cached) => {
-      if (cached) return cached;
-      return fetch(e.request)
-        .then((res) => {
-          const copy = res.clone();
-          caches.open(CACHE).then((c) => c.put(e.request, copy)).catch(() => {});
-          return res;
-        })
-        .catch(() => caches.match('./index.html'));
-    })
+    fetch(e.request)
+      .then((res) => {
+        const copy = res.clone();
+        caches.open(CACHE).then((c) => c.put(e.request, copy)).catch(() => {});
+        return res;
+      })
+      .catch(() => caches.match(e.request).then((cached) => cached || caches.match('./index.html')))
   );
 });
