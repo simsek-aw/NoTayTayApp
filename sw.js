@@ -1,7 +1,7 @@
 // ============================================================================
 //  Service Worker — Offline-Cache (App-Shell)
 // ============================================================================
-const CACHE = 'schlummer-v4';
+const CACHE = 'schlummer-v5';
 const ASSETS = [
   './',
   './index.html',
@@ -12,6 +12,7 @@ const ASSETS = [
   './js/engine.js',
   './js/sync.js',
   './js/notify.js',
+  './js/import-napper.js',
   './js/firebase-config.js',
   './manifest.webmanifest',
   './icons/icon-192.png',

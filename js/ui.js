@@ -4,6 +4,7 @@
 import { store } from './store.js';
 import { predict, ageProfile, ageInDays, fmtDuration } from './engine.js';
 import * as notify from './notify.js';
+import { parseNapperCsv } from './import-napper.js';
 
 const $ = (id) => document.getElementById(id);
 const pad = (n) => String(n).padStart(2, '0');
@@ -472,6 +473,27 @@ export function bindEvents() {
     reader.onload = () => {
       try { store.importJSON(reader.result); render(); toast('Daten importiert'); }
       catch { toast('Import fehlgeschlagen'); }
+    };
+    reader.readAsText(file);
+  };
+  $('napper-btn').onclick = () => $('napper-file').click();
+  $('napper-file').onchange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const { sessions, stats } = parseNapperCsv(reader.result);
+        if (!sessions.length) { toast('Keine Schlafdaten in der Datei gefunden'); return; }
+        const added = store.importSessions(sessions);
+        render();
+        toast(`Napper-Import: ${added} neue Einträge (${stats.naps} Nickerchen, ${stats.nights} Nächte)`);
+      } catch (err) {
+        console.error(err);
+        toast('Napper-Import fehlgeschlagen');
+      } finally {
+        e.target.value = '';
+      }
     };
     reader.readAsText(file);
   };

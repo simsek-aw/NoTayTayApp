@@ -178,6 +178,24 @@ export const store = {
     }
   },
 
+  // Mehrere Sessions auf einmal importieren (z. B. aus Napper-CSV).
+  // Lokal zusammenfuehren mit Dedup (type + Startminute); KEIN Sync-Push pro
+  // Eintrag – die Historie laedt beim naechsten Sync-Verbinden ohnehin hoch.
+  importSessions(list) {
+    const keyOf = (s) => `${s.type}|${new Date(s.start).toISOString().slice(0, 16)}`;
+    const seen = new Set(state.sessions.map(keyOf));
+    let added = 0;
+    for (const item of list) {
+      const k = keyOf(item);
+      if (seen.has(k)) continue;
+      seen.add(k);
+      state.sessions.push({ id: uid(), type: item.type, start: item.start, end: item.end || null });
+      added++;
+    }
+    persist();
+    return added;
+  },
+
   clearAll() {
     // Sync trennen, damit NICHT versehentlich die Daten des Partners
     // in der Cloud gelöscht werden. Löscht nur lokal auf diesem Gerät.
