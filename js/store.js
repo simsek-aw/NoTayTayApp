@@ -4,30 +4,56 @@
 // ============================================================================
 
 import * as sync from './sync.js';
+import { SEED } from './seed-data.js';
 
 const KEY = 'babysleep.v1';
 const FAMILY_KEY = 'babysleep.family'; // Familien-Code separat (nicht im Export/Sync)
+const SEED_KEY = 'babysleep.seedVersion'; // welche Startdaten-Version schon geladen wurde
+
+// Feste Baby-Konfiguration (App ist auf ein Baby ausgelegt).
+const FIXED_BABY = { name: 'Miray', birthDate: '2025-11-03' };
 
 const defaultState = {
-  baby: { name: '', birthDate: '' },
+  baby: { ...FIXED_BABY },
   sessions: [], // { id, type:'nap'|'night', start:ISO, end:ISO|null, note? }
 };
 
 let applyingRemote = false; // verhindert Rück-Push während eingehender Sync-Daten
 
 function load() {
+  let base;
   try {
     const raw = localStorage.getItem(KEY);
-    if (!raw) return structuredClone(defaultState);
-    const parsed = JSON.parse(raw);
-    return { ...structuredClone(defaultState), ...parsed };
+    base = raw ? { ...structuredClone(defaultState), ...JSON.parse(raw) } : structuredClone(defaultState);
   } catch {
-    return structuredClone(defaultState);
+    base = structuredClone(defaultState);
   }
+  base.baby = { ...FIXED_BABY }; // Baby ist fest verdrahtet, egal was gespeichert war
+  return base;
 }
 
-let state = load();
+// Mitgelieferte Startdaten (Mirays importierte Historie) einmalig – bzw. bei
+// neuer Version – lokal einspielen, ohne vorhandene (live getrackte) Einträge
+// zu verlieren. Dedup über type + Startminute.
+function applySeedIfNeeded(target) {
+  let applied = 0;
+  try { applied = parseInt(localStorage.getItem(SEED_KEY) || '0', 10) || 0; } catch { /* ignore */ }
+  if (applied >= SEED.version) return false;
+  const keyOf = (s) => `${s.type}|${new Date(s.start).toISOString().slice(0, 16)}`;
+  const seen = new Set(target.sessions.map(keyOf));
+  for (const item of SEED.sessions) {
+    const k = keyOf(item);
+    if (seen.has(k)) continue;
+    seen.add(k);
+    target.sessions.push({ id: uid(), type: item.type, start: item.start, end: item.end || null });
+  }
+  try { localStorage.setItem(SEED_KEY, String(SEED.version)); } catch { /* ignore */ }
+  return true;
+}
+
 const listeners = new Set();
+let state = load();
+if (applySeedIfNeeded(state)) persist();
 
 function persist() {
   try {
@@ -196,12 +222,14 @@ export const store = {
     return added;
   },
 
-  clearAll() {
-    // Sync trennen, damit NICHT versehentlich die Daten des Partners
-    // in der Cloud gelöscht werden. Löscht nur lokal auf diesem Gerät.
+  // Setzt die live getrackten Einträge zurück und spielt Mirays mitgelieferte
+  // Startdaten erneut ein (kein unwiederbringlicher Totalverlust).
+  resetToSeed() {
     if (sync.isConnected()) sync.stopSync();
     this.setFamilyCode(null);
     state = structuredClone(defaultState);
+    try { localStorage.setItem(SEED_KEY, '0'); } catch { /* ignore */ }
+    applySeedIfNeeded(state);
     persist();
   },
 };

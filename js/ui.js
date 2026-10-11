@@ -4,7 +4,6 @@
 import { store } from './store.js';
 import { predict, ageProfile, ageInDays, fmtDuration } from './engine.js';
 import * as notify from './notify.js';
-import { parseNapperCsv } from './import-napper.js';
 
 const $ = (id) => document.getElementById(id);
 const pad = (n) => String(n).padStart(2, '0');
@@ -43,13 +42,6 @@ function toast(msg) {
     t.classList.remove('show');
     setTimeout(() => (t.hidden = true), 300);
   }, 2200);
-}
-
-// Standard-Geburtsdatum: heute minus 8 Monate (Format YYYY-MM-DD)
-function defaultBirthDate() {
-  const d = new Date();
-  d.setMonth(d.getMonth() - 8);
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
 // Zufälligen, gut lesbaren Familien-Code erzeugen (keine mehrdeutigen Zeichen)
@@ -135,13 +127,6 @@ function toLocalInput(d) {
 // ---------------------------------------------------------------------------
 export function render() {
   const state = store.get();
-
-  // Onboarding erzwingen, wenn kein Geburtsdatum
-  if (!state.baby.birthDate) {
-    // Standard: Kind ist 8 Monate alt (dynamisch berechnet)
-    if (!$('ob-date').value) $('ob-date').value = defaultBirthDate();
-    $('onboarding').hidden = false;
-  }
 
   // Kopfzeile
   $('baby-name').textContent = state.baby.name || 'Baby';
@@ -400,21 +385,8 @@ function updateCountdown() {
 //  Event-Bindung
 // ---------------------------------------------------------------------------
 export function bindEvents() {
-  // Onboarding
-  $('ob-save').onclick = () => {
-    const name = $('ob-name').value.trim();
-    const date = $('ob-date').value;
-    if (!date) { toast('Bitte Geburtsdatum eingeben'); return; }
-    store.setBaby({ name, birthDate: date });
-    $('onboarding').hidden = true;
-    render();
-  };
-
   // Einstellungen
   $('settings-btn').onclick = () => {
-    const b = store.get().baby;
-    $('set-name').value = b.name || '';
-    $('set-date').value = b.birthDate || '';
     $('sync-code').value = store.getFamilyCode() || '';
     updateSyncUI(store.syncConnected() ? 'connected' : 'disconnected');
     updateNotifyUI();
@@ -454,52 +426,10 @@ export function bindEvents() {
     toast('Sync getrennt (Daten bleiben lokal erhalten)');
   };
   $('settings-close').onclick = () => $('settings').hidden = true;
-  $('set-name').onchange = () => store.setBaby({ name: $('set-name').value.trim() });
-  $('set-date').onchange = () => { store.setBaby({ birthDate: $('set-date').value }); render(); };
 
-  $('export-btn').onclick = () => {
-    const blob = new Blob([store.exportJSON()], { type: 'application/json' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `schlummer-daten-${new Date().toISOString().slice(0, 10)}.json`;
-    a.click();
-    URL.revokeObjectURL(a.href);
-  };
-  $('import-btn').onclick = () => $('import-file').click();
-  $('import-file').onchange = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      try { store.importJSON(reader.result); render(); toast('Daten importiert'); }
-      catch { toast('Import fehlgeschlagen'); }
-    };
-    reader.readAsText(file);
-  };
-  $('napper-btn').onclick = () => $('napper-file').click();
-  $('napper-file').onchange = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      try {
-        const { sessions, stats } = parseNapperCsv(reader.result);
-        if (!sessions.length) { toast('Keine Schlafdaten in der Datei gefunden'); return; }
-        const added = store.importSessions(sessions);
-        render();
-        toast(`Napper-Import: ${added} neue Einträge (${stats.naps} Nickerchen, ${stats.nights} Nächte)`);
-      } catch (err) {
-        console.error(err);
-        toast('Napper-Import fehlgeschlagen');
-      } finally {
-        e.target.value = '';
-      }
-    };
-    reader.readAsText(file);
-  };
   $('clear-btn').onclick = () => {
-    if (confirm('Wirklich ALLE Daten löschen? Das kann nicht rückgängig gemacht werden.')) {
-      store.clearAll();
+    if (confirm('Live getrackte Einträge zurücksetzen und Mirays Startdaten neu laden?')) {
+      store.resetToSeed();
       $('settings').hidden = true;
       render();
     }

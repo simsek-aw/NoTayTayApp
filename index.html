@@ -75,20 +75,6 @@
   </div>
 
   <!-- Onboarding -->
-  <div class="overlay" id="onboarding" hidden>
-    <div class="sheet">
-      <h2>Willkommen 👶</h2>
-      <p class="muted">Für möglichst genaue Vorhersagen brauchen wir das Geburtsdatum.</p>
-      <label>Name des Babys
-        <input type="text" id="ob-name" placeholder="z. B. Emma" />
-      </label>
-      <label>Geburtsdatum
-        <input type="date" id="ob-date" />
-      </label>
-      <button class="btn btn-primary btn-block" id="ob-save">Los geht's</button>
-    </div>
-  </div>
-
   <!-- Einstellungen -->
   <div class="overlay" id="settings" hidden>
     <div class="sheet">
@@ -96,12 +82,6 @@
         <h2>Einstellungen</h2>
         <button class="icon-btn" id="settings-close" aria-label="Schließen">✕</button>
       </div>
-      <label>Name
-        <input type="text" id="set-name" />
-      </label>
-      <label>Geburtsdatum
-        <input type="date" id="set-date" />
-      </label>
 
       <!-- Familien-Sync -->
       <div class="sync-box">
@@ -147,12 +127,7 @@
       </div>
 
       <div class="settings-actions">
-        <button class="btn" id="export-btn">Daten exportieren</button>
-        <button class="btn" id="import-btn">Daten importieren</button>
-        <input type="file" id="import-file" accept="application/json" hidden />
-        <button class="btn" id="napper-btn">📥 Napper-CSV importieren</button>
-        <input type="file" id="napper-file" accept=".csv,text/csv" hidden />
-        <button class="btn btn-danger" id="clear-btn">Alle Daten löschen</button>
+        <button class="btn btn-danger" id="clear-btn">Auf Startdaten zurücksetzen</button>
       </div>
       <p class="muted small">Alle Daten werden nur lokal auf diesem Gerät gespeichert.</p>
     </div>
