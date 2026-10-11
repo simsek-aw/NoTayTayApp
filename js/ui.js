@@ -575,13 +575,11 @@ function renderHistory() {
     } else {
       durTxt = `${fmtTime(start)} · läuft …`;
     }
-    const moodEmoji = ['', '😣', '😟', '😐', '🙂', '😄'][s.mood || 0] || '';
-    const noteTxt = s.note ? ` · ${escapeHtml(s.note)}` : '';
     li.innerHTML = `
       <span class="hi-icon">${icon}</span>
       <div class="hi-body">
-        <div class="hi-title">${typeLabel} ${moodEmoji}</div>
-        <div class="hi-sub">${durTxt}${noteTxt}</div>
+        <div class="hi-title">${typeLabel}</div>
+        <div class="hi-sub">${durTxt}</div>
       </div>
       <button class="icon-btn hi-edit" aria-label="Bearbeiten">✎</button>`;
     li.querySelector('.hi-edit').onclick = () => openManual(s);
@@ -593,14 +591,6 @@ function renderHistory() {
 //  Manueller Eintrag / Bearbeiten
 // ---------------------------------------------------------------------------
 let editingId = null;
-let selectedMood = 0;
-
-function setMood(m) {
-  selectedMood = m;
-  document.querySelectorAll('#man-mood .mood').forEach((b) => {
-    b.classList.toggle('sel', Number(b.dataset.mood) === m && m !== 0);
-  });
-}
 
 function openManual(session) {
   editingId = session ? session.id : null;
@@ -608,8 +598,6 @@ function openManual(session) {
   $('man-type').value = session ? session.type : 'nap';
   $('man-start').value = toLocalInput(session ? session.start : new Date());
   $('man-end').value = session && session.end ? toLocalInput(session.end) : '';
-  $('man-note').value = session && session.note ? session.note : '';
-  setMood(session && session.mood ? session.mood : 0);
   $('man-delete').hidden = !session;
   $('manual').hidden = false;
 }
@@ -744,20 +732,16 @@ export function bindEvents() {
 
   // Manueller Eintrag
   $('manual-close').onclick = closeManual;
-  document.querySelectorAll('#man-mood .mood').forEach((b) => {
-    b.onclick = () => setMood(Number(b.dataset.mood));
-  });
   $('man-save').onclick = () => {
     const type = $('man-type').value;
     const start = $('man-start').value;
     const end = $('man-end').value;
     if (!start) { toast('Bitte Beginn angeben'); return; }
     if (end && new Date(end) <= new Date(start)) { toast('Ende muss nach dem Beginn liegen'); return; }
-    const note = $('man-note').value.trim();
     if (editingId) {
-      store.updateSession(editingId, { type, start, end: end || null, mood: selectedMood || null, note: note || null });
+      store.updateSession(editingId, { type, start, end: end || null });
     } else {
-      store.addManual({ type, start, end: end || null, mood: selectedMood || undefined, note: note || undefined });
+      store.addManual({ type, start, end: end || null });
     }
     closeManual();
     render();

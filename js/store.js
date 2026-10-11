@@ -111,14 +111,8 @@ export const store = {
   },
 
   // Manuellen Eintrag hinzufügen (z. B. Schlafenszeit nachtragen)
-  addManual({ type, start, end, mood, note }) {
-    const s = {
-      id: uid(), type,
-      start: new Date(start).toISOString(),
-      end: end ? new Date(end).toISOString() : null,
-    };
-    if (mood) s.mood = mood;
-    if (note) s.note = note;
+  addManual({ type, start, end }) {
+    const s = { id: uid(), type, start: new Date(start).toISOString(), end: end ? new Date(end).toISOString() : null };
     state.sessions.push(s);
     persist();
     if (!applyingRemote) sync.pushSession(s);
