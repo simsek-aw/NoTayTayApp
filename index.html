@@ -76,6 +76,9 @@
         <div class="confidence" id="confidence"></div>
       </section>
 
+      <!-- Schub-/Regressions-Hinweis -->
+      <div class="shift-banner" id="shift-banner" hidden></div>
+
       <!-- Tages-Übersicht -->
       <section class="card summary-card" id="summary-card" hidden>
         <div class="card-title">Heute</div>
@@ -92,6 +95,21 @@
           <span class="lg-item"><span class="lg-dot lg-night"></span>Nacht</span>
         </div>
         <div class="trend-hint" id="trend-hint"></div>
+      </section>
+
+      <!-- Prognose-Rückblick -->
+      <section class="card review-card" id="review-card" hidden>
+        <div class="card-title">Prognose-Rückblick (Nickerchen)</div>
+        <div class="review-stats" id="review-stats"></div>
+        <div class="review-chart" id="review-chart"></div>
+        <div class="review-hint" id="review-hint"></div>
+      </section>
+
+      <!-- Monats-Heatmap -->
+      <section class="card heat-card" id="heat-card" hidden>
+        <div class="card-title">Schlaf-Kalender (Gesamt/Tag)</div>
+        <div class="heat-grid" id="heat-grid"></div>
+        <div class="heat-legend" id="heat-legend"></div>
       </section>
 
       <!-- Tagesplan -->
@@ -163,6 +181,7 @@
       </div>
 
       <div class="settings-actions">
+        <button class="btn" id="report-btn">📄 Bericht für Kinderarzt</button>
         <button class="btn btn-danger" id="clear-btn">Auf Startdaten zurücksetzen</button>
       </div>
       <p class="muted small">Alle Daten werden nur lokal auf diesem Gerät gespeichert.</p>
@@ -187,6 +206,19 @@
       </label>
       <label id="man-end-wrap">Ende <span class="muted small">(leer = läuft noch)</span>
         <input type="datetime-local" id="man-end" />
+      </label>
+      <label>Stimmung
+        <div class="mood-row" id="man-mood">
+          <button type="button" class="mood" data-mood="0">—</button>
+          <button type="button" class="mood" data-mood="1">😣</button>
+          <button type="button" class="mood" data-mood="2">😟</button>
+          <button type="button" class="mood" data-mood="3">😐</button>
+          <button type="button" class="mood" data-mood="4">🙂</button>
+          <button type="button" class="mood" data-mood="5">😄</button>
+        </div>
+      </label>
+      <label>Notiz
+        <input type="text" id="man-note" maxlength="120" placeholder="z. B. schwer eingeschlafen" />
       </label>
       <div class="sheet-actions">
         <button class="btn btn-danger" id="man-delete" hidden>Löschen</button>

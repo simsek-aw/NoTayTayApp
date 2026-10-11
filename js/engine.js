@@ -405,3 +405,68 @@ export function weeklyTrend(sessions, now = new Date(), days = 7) {
   return out;
 }
 
+// ---------------------------------------------------------------------------
+//  Prognose-Rückblick (Backtest): Für die letzten Schlaf-Beginne wird – nur mit
+//  den DAMALS verfügbaren Daten – vorhergesagt und mit dem tatsächlichen
+//  Einschlafen verglichen. Zeigt, wie treffsicher die App ist.
+// ---------------------------------------------------------------------------
+export function predictionReview(sessions, birthDate, now = new Date(), count = 8) {
+  const done = sessions.filter((s) => s.end).sort((a, b) => new Date(a.start) - new Date(b.start));
+  const results = [];
+  for (let i = 1; i < done.length; i++) {
+    const s = done[i];
+    if (s.type !== 'nap') continue; // Nickerchen sind planungsrelevant & stabiler
+    const onset = new Date(s.start);
+    if (onset > now || now - onset > 21 * 24 * HOUR) continue; // nur letzte ~3 Wochen
+    const lastWake = new Date(done[i - 1].end);
+    const gapMin = (onset - lastWake) / MIN;
+    if (gapMin <= 20 || gapMin > 12 * 60) continue; // ungültig / Zyklusgrenze
+    const before = done.filter((x) => new Date(x.start) < onset);
+    const pr = predict(before, birthDate, new Date(lastWake.getTime() + 60000));
+    if (!pr.prediction || pr.prediction.kind !== 'sleep') continue;
+    results.push({ onset, type: s.type, devMin: Math.round((onset - pr.prediction.time) / MIN) });
+  }
+  const recent = results.slice(-count);
+  if (recent.length < 3) return null;
+  const abs = recent.map((r) => Math.abs(r.devMin));
+  return {
+    items: recent,
+    count: recent.length,
+    avgAbs: Math.round(abs.reduce((a, b) => a + b, 0) / abs.length),
+    avgSigned: Math.round(recent.reduce((a, r) => a + r.devMin, 0) / recent.length),
+    within30: Math.round((100 * recent.filter((r) => Math.abs(r.devMin) <= 30).length) / recent.length),
+  };
+}
+
+// ---------------------------------------------------------------------------
+//  Schub-/Regressions-Erkennung: Ø Wachfenster der letzten ~3 Tage vs. der
+//  ~11 Tage davor. Große Änderungen deuten auf Wachstum/Entwicklung oder eine
+//  Schlafregression hin.
+// ---------------------------------------------------------------------------
+export function detectShift(sessions, now = new Date()) {
+  const cutRecent = new Date(now - 3 * 24 * HOUR);
+  const cutBase = new Date(now - 14 * 24 * HOUR);
+  const perCycle = buildCycles(sessions)
+    .filter((c) => c.morningWake)
+    .map((c) => {
+      const ws = [...c.wakeWindows, c.bedtimeWindow].filter((x) => x > 0);
+      return { date: c.morningWake, avg: ws.length ? ws.reduce((a, b) => a + b, 0) / ws.length : 0, naps: c.naps.length };
+    })
+    .filter((c) => c.avg > 0);
+  const recent = perCycle.filter((c) => c.date >= cutRecent);
+  const base = perCycle.filter((c) => c.date >= cutBase && c.date < cutRecent);
+  if (recent.length < 2 || base.length < 3) return { type: 'none' };
+  const mean = (a) => a.reduce((x, y) => x + y, 0) / a.length;
+  const rAvg = mean(recent.map((c) => c.avg));
+  const bAvg = mean(base.map((c) => c.avg));
+  const delta = (rAvg - bAvg) / bAvg;
+  const deltaMin = Math.round(rAvg - bAvg);
+  const rNaps = mean(recent.map((c) => c.naps));
+  const bNaps = mean(base.map((c) => c.naps));
+  if (delta >= 0.15) return { type: 'longer', deltaMin };
+  if (delta <= -0.15) return { type: 'shorter', deltaMin };
+  if (rNaps <= bNaps - 0.6) return { type: 'dropnap' };
+  return { type: 'none' };
+}
+
+

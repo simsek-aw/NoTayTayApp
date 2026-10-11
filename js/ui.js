@@ -2,7 +2,7 @@
 //  UI — Rendering & Interaktion
 // ============================================================================
 import { store } from './store.js';
-import { predict, ageProfile, ageInDays, fmtDuration, daySummary, weeklyTrend } from './engine.js';
+import { predict, ageProfile, ageInDays, fmtDuration, daySummary, weeklyTrend, predictionReview, detectShift } from './engine.js';
 import * as notify from './notify.js';
 
 const $ = (id) => document.getElementById(id);
@@ -159,8 +159,11 @@ export function render() {
   renderStatus(pred);
   renderActions(pred);
   renderNext(pred);
+  renderShift(state);
   renderSummary(state, pred);
   renderTrends(state);
+  renderReview(state);
+  renderHeatmap(state);
   renderPlan(pred);
   renderHistory();
   notify.schedule(pred.prediction);
@@ -169,6 +172,56 @@ export function render() {
 // Kurzes haptisches Feedback (wo unterstützt)
 function vibrate(ms = 12) {
   try { if (navigator.vibrate) navigator.vibrate(ms); } catch { /* ignore */ }
+}
+
+function escapeHtml(str) {
+  return String(str).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+// ---------------------------------------------------------------------------
+//  Kinderarzt-Bericht: druck-/teilbare Zusammenfassung (window.print -> PDF)
+// ---------------------------------------------------------------------------
+function buildReport() {
+  const state = store.get();
+  const now = new Date();
+  const prof = ageProfile(state.baby.birthDate, now);
+  const days = ageInDays(state.baby.birthDate, now);
+  const week = weeklyTrend(state.sessions, now, 7);
+  const complete = week.filter((d) => d.nightMin > 0); // vollständige Tage (mit Nacht)
+  const avg = (arr) => (arr.length ? Math.round(arr.reduce((a, b) => a + b, 0) / arr.length) : 0);
+  const avgNaps = complete.length ? (complete.reduce((a, d) => a + d.napCount, 0) / complete.length).toFixed(1).replace('.', ',') : '–';
+  const avgDay = avg(complete.map((d) => d.napMin));
+  const avgNight = avg(complete.map((d) => d.nightMin));
+  const avgTotal = avg(complete.map((d) => d.napMin + d.nightMin));
+  const rev = predictionReview(state.sessions, state.baby.birthDate, now);
+
+  const rows = week.map((d) => `<tr><td>${d.date.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' })}</td><td>${d.napCount}×</td><td>${d.napMin ? fmtDuration(d.napMin) : '–'}</td><td>${d.nightMin ? fmtDuration(d.nightMin) : '–'}</td><td>${(d.napMin + d.nightMin) ? fmtDuration(d.napMin + d.nightMin) : '–'}</td></tr>`).join('');
+
+  const ageStr = days < 90 ? `${Math.floor(days / 7)} Wochen` : `${Math.round(days / 30.44)} Monate`;
+  let report = document.getElementById('report');
+  if (!report) { report = document.createElement('div'); report.id = 'report'; document.body.appendChild(report); }
+  report.innerHTML = `
+    <div class="report-actions">
+      <button class="btn" id="report-print">🖨️ Drucken / als PDF</button>
+      <button class="btn" id="report-close">Schließen</button>
+    </div>
+    <h1>Schlafbericht – ${escapeHtml(state.baby.name)}</h1>
+    <div class="rp-sub">Alter: ${ageStr} (geb. ${new Date(state.baby.birthDate).toLocaleDateString('de-DE')}) · Stand: ${now.toLocaleDateString('de-DE')} · Richtwert-Altersgruppe: ${prof.label}</div>
+    <h2>Durchschnitt (vollständige Tage, letzte 7)</h2>
+    <div class="rp-kpis">
+      <div class="rp-kpi"><b>${avgNaps}</b> Nickerchen / Tag</div>
+      <div class="rp-kpi"><b>${avgDay ? fmtDuration(avgDay) : '–'}</b> Tagschlaf / Tag</div>
+      <div class="rp-kpi"><b>${avgNight ? fmtDuration(avgNight) : '–'}</b> Nachtschlaf</div>
+      <div class="rp-kpi"><b>${avgTotal ? fmtDuration(avgTotal) : '–'}</b> Gesamtschlaf / Tag</div>
+    </div>
+    <h2>Tagesübersicht (7 Tage)</h2>
+    <table><thead><tr><th>Tag</th><th>Nickerchen</th><th>Tagschlaf</th><th>Nacht</th><th>Gesamt</th></tr></thead><tbody>${rows}</tbody></table>
+    ${rev ? `<h2>Prognose-Treffsicherheit (Nickerchen)</h2><p>Ø Abweichung ±${rev.avgAbs} Min · ${rev.within30}% im ±30-Min-Fenster (letzte ${rev.count}).</p>` : ''}
+    <p style="margin-top:20px;font-size:11px;color:#888;">Erstellt mit Schlummer. Richtwerte dienen der Orientierung und ersetzen keine ärztliche Beratung.</p>
+  `;
+  report.hidden = false;
+  document.getElementById('report-print').onclick = () => window.print();
+  document.getElementById('report-close').onclick = () => { report.hidden = true; };
 }
 
 function renderStatus(pred) {
@@ -394,6 +447,76 @@ function renderTrends(state) {
   }
 }
 
+function renderShift(state) {
+  const el = $('shift-banner');
+  const sh = detectShift(state.sessions);
+  const map = {
+    longer: ['sh-longer', `📈 Wachfenster werden länger (Ø +${Math.abs(sh.deltaMin || 0)} Min) – Miray entwickelt sich weiter. Die Prognose zieht automatisch mit.`],
+    shorter: ['sh-shorter', `📉 Wachfenster zuletzt kürzer (Ø ${sh.deltaMin || 0} Min) – evtl. Schlafregression oder Übermüdung. Etwas früher hinlegen kann helfen.`],
+    dropnap: ['sh-dropnap', '🔄 Zuletzt weniger Nickerchen – vermutlich der Übergang von 2 auf 1.'],
+  };
+  if (sh.type !== 'none' && map[sh.type]) {
+    el.hidden = false;
+    el.className = 'shift-banner ' + map[sh.type][0];
+    el.textContent = map[sh.type][1];
+  } else {
+    el.hidden = true;
+  }
+}
+
+function renderReview(state) {
+  const card = $('review-card');
+  const r = predictionReview(state.sessions, state.baby.birthDate);
+  if (!r) { card.hidden = true; return; }
+  card.hidden = false;
+  $('review-stats').innerHTML = [
+    tile(`±${r.avgAbs}`, 'Ø Abweichung (Min)', '', ''),
+    tile(`${r.within30}%`, 'im ±30-Min-Fenster', '', r.within30 >= 50 ? 'ok' : 'low'),
+    tile(`${r.avgSigned >= 0 ? '+' : ''}${r.avgSigned}`, 'Tendenz (Min)', r.avgSigned >= 0 ? 'später' : 'früher', ''),
+  ].join('');
+  const chart = $('review-chart');
+  chart.innerHTML = '';
+  const maxDev = Math.max(30, ...r.items.map((i) => Math.abs(i.devMin)));
+  r.items.forEach((it) => {
+    const col = document.createElement('div');
+    col.className = 'rv-col';
+    const bar = document.createElement('div');
+    bar.className = 'rv-bar ' + (it.devMin >= 0 ? 'later' : 'early');
+    bar.style.height = Math.round(Math.min(1, Math.abs(it.devMin) / maxDev) * 44) + 'px';
+    bar.title = `${fmtTime(it.onset)}: ${it.devMin >= 0 ? '+' : ''}${it.devMin} Min`;
+    col.appendChild(bar);
+    chart.appendChild(col);
+  });
+  $('review-hint').textContent = `Letzte ${r.count} Nickerchen: Vorhersage vs. tatsächlich. Oben = später als vorhergesagt (gelb), unten = früher (blau).`;
+}
+
+function renderHeatmap(state) {
+  const card = $('heat-card');
+  const days = weeklyTrend(state.sessions, new Date(), 42); // 6 Wochen
+  if (!days.some((d) => d.napMin + d.nightMin > 0)) { card.hidden = true; return; }
+  card.hidden = false;
+  const grid = $('heat-grid');
+  grid.innerHTML = '';
+  ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'].forEach((d) => {
+    const h = document.createElement('div'); h.className = 'heat-dow'; h.textContent = d; grid.appendChild(h);
+  });
+  const offset = (days[0].date.getDay() + 6) % 7; // Montag = 0
+  for (let i = 0; i < offset; i++) {
+    const e = document.createElement('div'); e.className = 'heat-cell empty'; grid.appendChild(e);
+  }
+  days.forEach((d) => {
+    const total = d.napMin + d.nightMin;
+    const lvl = total === 0 ? 0 : total < 600 ? 1 : total < 720 ? 2 : total < 840 ? 3 : 4;
+    const cell = document.createElement('div');
+    cell.className = 'heat-cell h' + lvl;
+    cell.textContent = d.date.getDate();
+    cell.title = `${d.date.toLocaleDateString('de-DE')}: ${total ? fmtDuration(total) : 'keine Daten'}`;
+    grid.appendChild(cell);
+  });
+  const colors = ['#3a2f6b', '#5243a0', '#6f5cc9', '#9f8dff'];
+  $('heat-legend').innerHTML = 'wenig ' + colors.map((c) => `<span class="hl-box" style="background:${c}"></span>`).join('') + ' viel · Gesamtschlaf/Tag';
+}
+
 function renderPlan(pred) {
   const card = $('plan-card');
   const list = $('timeline');
@@ -452,11 +575,13 @@ function renderHistory() {
     } else {
       durTxt = `${fmtTime(start)} · läuft …`;
     }
+    const moodEmoji = ['', '😣', '😟', '😐', '🙂', '😄'][s.mood || 0] || '';
+    const noteTxt = s.note ? ` · ${escapeHtml(s.note)}` : '';
     li.innerHTML = `
       <span class="hi-icon">${icon}</span>
       <div class="hi-body">
-        <div class="hi-title">${typeLabel}</div>
-        <div class="hi-sub">${durTxt}</div>
+        <div class="hi-title">${typeLabel} ${moodEmoji}</div>
+        <div class="hi-sub">${durTxt}${noteTxt}</div>
       </div>
       <button class="icon-btn hi-edit" aria-label="Bearbeiten">✎</button>`;
     li.querySelector('.hi-edit').onclick = () => openManual(s);
@@ -468,6 +593,14 @@ function renderHistory() {
 //  Manueller Eintrag / Bearbeiten
 // ---------------------------------------------------------------------------
 let editingId = null;
+let selectedMood = 0;
+
+function setMood(m) {
+  selectedMood = m;
+  document.querySelectorAll('#man-mood .mood').forEach((b) => {
+    b.classList.toggle('sel', Number(b.dataset.mood) === m && m !== 0);
+  });
+}
 
 function openManual(session) {
   editingId = session ? session.id : null;
@@ -475,6 +608,8 @@ function openManual(session) {
   $('man-type').value = session ? session.type : 'nap';
   $('man-start').value = toLocalInput(session ? session.start : new Date());
   $('man-end').value = session && session.end ? toLocalInput(session.end) : '';
+  $('man-note').value = session && session.note ? session.note : '';
+  setMood(session && session.mood ? session.mood : 0);
   $('man-delete').hidden = !session;
   $('manual').hidden = false;
 }
@@ -597,6 +732,8 @@ export function bindEvents() {
   };
   $('settings-close').onclick = () => $('settings').hidden = true;
 
+  $('report-btn').onclick = () => { $('settings').hidden = true; buildReport(); };
+
   $('clear-btn').onclick = () => {
     if (confirm('Live getrackte Einträge zurücksetzen und Mirays Startdaten neu laden?')) {
       store.resetToSeed();
@@ -607,16 +744,20 @@ export function bindEvents() {
 
   // Manueller Eintrag
   $('manual-close').onclick = closeManual;
+  document.querySelectorAll('#man-mood .mood').forEach((b) => {
+    b.onclick = () => setMood(Number(b.dataset.mood));
+  });
   $('man-save').onclick = () => {
     const type = $('man-type').value;
     const start = $('man-start').value;
     const end = $('man-end').value;
     if (!start) { toast('Bitte Beginn angeben'); return; }
     if (end && new Date(end) <= new Date(start)) { toast('Ende muss nach dem Beginn liegen'); return; }
+    const note = $('man-note').value.trim();
     if (editingId) {
-      store.updateSession(editingId, { type, start, end: end || null });
+      store.updateSession(editingId, { type, start, end: end || null, mood: selectedMood || null, note: note || null });
     } else {
-      store.addManual({ type, start, end: end || null });
+      store.addManual({ type, start, end: end || null, mood: selectedMood || undefined, note: note || undefined });
     }
     closeManual();
     render();
