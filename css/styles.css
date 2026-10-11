@@ -232,3 +232,104 @@ body {
   max-width: 90%;
 }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ===== Header-Aktionen ===== */
+.header-actions { display: flex; gap: 6px; align-items: center; }
+
+/* ===== Wachfenster-Ring ===== */
+.next-main { display: flex; align-items: center; gap: 16px; }
+.ww-ring { position: relative; width: 72px; height: 72px; flex: 0 0 auto; }
+.ww-ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+.ww-ring circle { fill: none; stroke-width: 8; stroke-linecap: round; }
+.ww-track { stroke: rgba(255,255,255,0.10); }
+.ww-prog {
+  stroke: var(--ring-color, var(--accent));
+  stroke-dasharray: 276.46;
+  stroke-dashoffset: 276.46;
+  transition: stroke-dashoffset .5s linear, stroke .4s;
+}
+.ww-ring .next-icon {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  font-size: 30px;
+}
+.ww-ring.ring-green { --ring-color: #6fcf8e; }
+.ww-ring.ring-amber { --ring-color: var(--awake); }
+.ww-ring.ring-red   { --ring-color: #ff8a8a; }
+.ww-ring.ring-sleep { --ring-color: var(--asleep); }
+
+/* ===== Übermüdungs-Banner ===== */
+.overtired {
+  margin-top: 12px; padding: 10px 14px; border-radius: 12px; font-size: 14px; font-weight: 700;
+  color: #ff8a8a; background: rgba(255,138,138,0.12); border: 1px solid rgba(255,138,138,0.3);
+}
+.next-countdown.cd-red .cd-value { color: #ff8a8a; }
+
+/* ===== Tages-Übersicht ===== */
+.summary-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.s-tile { background: var(--bg-2); border-radius: 14px; padding: 12px 8px; text-align: center; }
+.s-val { font-size: 22px; font-weight: 800; color: var(--text); font-variant-numeric: tabular-nums; }
+.s-lbl { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.s-cmp { font-size: 11px; margin-top: 4px; color: var(--muted); }
+.s-cmp.ok { color: #6fcf8e; }
+.s-cmp.low { color: var(--awake); }
+.summary-hint { font-size: 12.5px; color: var(--muted); margin-top: 12px; }
+
+/* ===== 7-Tage-Trend (Balkendiagramm) ===== */
+.trend-chart { display: flex; align-items: flex-end; justify-content: space-between; gap: 6px; height: 140px; }
+.tc-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; height: 100%; justify-content: flex-end; }
+.tc-total { font-size: 10.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.tc-bar { width: 100%; max-width: 26px; display: flex; flex-direction: column-reverse; border-radius: 5px; overflow: hidden; }
+.tc-seg { width: 100%; }
+.tc-seg.seg-nap { background: var(--nap-color, #b98a3f); }
+.tc-seg.seg-night { background: var(--night-color, #8b7bff); margin-bottom: 2px; }
+.tc-lbl { font-size: 11px; color: var(--muted); }
+.tc-col.is-today .tc-lbl { color: var(--accent-2); font-weight: 800; }
+.trend-legend { display: flex; gap: 16px; margin-top: 12px; }
+.lg-item { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--muted); }
+.lg-dot { width: 11px; height: 11px; border-radius: 3px; }
+.lg-dot.lg-nap { background: #b98a3f; }
+.lg-dot.lg-night { background: #8b7bff; }
+.trend-hint { font-size: 12.5px; color: var(--accent-2); margin-top: 10px; font-weight: 600; }
+
+/* ===== Schnell-Erfassung (Chips) ===== */
+.quick-chips { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin-top: 4px; }
+.chip {
+  background: var(--card); border: 1px solid var(--line); color: var(--muted);
+  border-radius: 999px; padding: 7px 13px; font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.chip:active { color: var(--text); background: var(--card-solid); }
+
+/* ===== Toast-Undo ===== */
+.toast { display: flex; align-items: center; gap: 12px; }
+.toast-undo {
+  background: rgba(255,255,255,0.18); border: none; color: #fff; font-weight: 700;
+  border-radius: 999px; padding: 5px 12px; font-size: 13px; cursor: pointer; white-space: nowrap;
+}
+
+/* ===== Installations-Banner ===== */
+.install-banner {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  background: var(--card-solid); border: 1px solid var(--line); border-radius: 14px;
+  padding: 10px 12px; margin: 0 0 14px; font-size: 13.5px;
+}
+.install-btns { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; }
+.install-banner .btn { padding: 7px 12px; font-size: 13px; }
+
+/* ===== Nacht-/Dimm-Modus ===== */
+body.dim { background: #000; }
+body.dim #app > *:not(.app-header):not(.app-main) { }
+body.dim .app-header, body.dim .actions, body.dim .summary-card,
+body.dim .trend-card, body.dim .plan-card, body.dim .history-card,
+body.dim .install-banner, body.dim .next-meta, body.dim .confidence { display: none !important; }
+body.dim { color: #6a6a80; }
+body.dim .status-card, body.dim .next-card {
+  background: #000; border-color: rgba(255,255,255,0.06);
+}
+body.dim .status-timer { font-size: 56px; color: #8a8aa0; }
+body.dim .cd-value { color: #8a8aa0; }
+body.dim .app-main { padding-top: 40px; }
+.dim-exit {
+  position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+  background: rgba(255,255,255,0.08); color: #8a8aa0; border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 999px; padding: 10px 20px; font-size: 14px; z-index: 150;
+}

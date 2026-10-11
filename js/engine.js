@@ -344,3 +344,64 @@ export function fmtDuration(min) {
   if (h) return `${h} Std`;
   return `${m} Min`;
 }
+
+function sameDay(a, b) {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
+function durMin(s) {
+  return (new Date(s.end) - new Date(s.start)) / MIN;
+}
+
+// ---------------------------------------------------------------------------
+//  Tages-Übersicht: Schlaf heute vs. altersüblich.
+//  Nacht wird dem Tag zugerechnet, an dem sie ENDET (also heute = letzte Nacht).
+// ---------------------------------------------------------------------------
+export function daySummary(sessions, birthDate, now = new Date()) {
+  const prof = ageProfile(birthDate, now);
+  const todayNaps = sessions.filter((s) => s.type === 'nap' && s.end && sameDay(new Date(s.start), now));
+  const napMinutes = todayNaps.reduce((a, s) => a + durMin(s), 0);
+  const lastNight = sessions
+    .filter((s) => s.type === 'night' && s.end)
+    .sort((a, b) => new Date(b.end) - new Date(a.end))[0];
+  const nightMinutes = lastNight && sameDay(new Date(lastNight.end), now) ? durMin(lastNight) : 0;
+  return {
+    naps: todayNaps.length,
+    napMinutes: Math.round(napMinutes),
+    nightMinutes: Math.round(nightMinutes),
+    totalMinutes: Math.round(napMinutes + nightMinutes),
+    typical: {
+      naps: prof.naps,
+      napMinutes: prof.naps * prof.napDur,
+      nightMinutes: Math.round(prof.nightHrs * 60),
+      totalMinutes: Math.round(prof.naps * prof.napDur + prof.nightHrs * 60),
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+//  7-Tage-Trend: pro Kalendertag Nickerchen- und Nachtschlaf-Minuten.
+//  (Nacht dem Endtag/Morgen zugerechnet.) Für das kleine Balkendiagramm.
+// ---------------------------------------------------------------------------
+export function weeklyTrend(sessions, now = new Date(), days = 7) {
+  const wk = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
+  const out = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(now);
+    d.setDate(now.getDate() - i);
+    d.setHours(0, 0, 0, 0);
+    const naps = sessions.filter((s) => s.type === 'nap' && s.end && sameDay(new Date(s.start), d));
+    const napMin = naps.reduce((a, s) => a + durMin(s), 0);
+    const nightMin = sessions
+      .filter((s) => s.type === 'night' && s.end && sameDay(new Date(s.end), d))
+      .reduce((a, s) => a + durMin(s), 0);
+    out.push({
+      date: d,
+      label: wk[d.getDay()],
+      napMin: Math.round(napMin),
+      nightMin: Math.round(nightMin),
+      napCount: naps.length,
+    });
+  }
+  return out;
+}
+

@@ -1,7 +1,7 @@
 // ============================================================================
 //  Service Worker — Offline-Cache (App-Shell)
 // ============================================================================
-const CACHE = 'schlummer-v6';
+const CACHE = 'schlummer-v7';
 const ASSETS = [
   './',
   './index.html',

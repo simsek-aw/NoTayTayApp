@@ -25,8 +25,19 @@
           <div class="baby-age" id="baby-age"></div>
         </div>
       </div>
-      <button class="icon-btn" id="settings-btn" aria-label="Einstellungen">⚙️</button>
+      <div class="header-actions">
+        <button class="icon-btn" id="dim-btn" aria-label="Nachtmodus">🌙</button>
+        <button class="icon-btn" id="settings-btn" aria-label="Einstellungen">⚙️</button>
+      </div>
     </header>
+
+    <div class="install-banner" id="install-banner" hidden>
+      <span id="install-text">📲 Zum Startbildschirm hinzufügen für den App-Start.</span>
+      <div class="install-btns">
+        <button class="btn btn-primary" id="install-btn">Hinzufügen</button>
+        <button class="icon-btn" id="install-dismiss" aria-label="Schließen">✕</button>
+      </div>
+    </div>
 
     <main class="app-main">
       <!-- Großer Status: wach / schläft -->
@@ -43,12 +54,19 @@
       <section class="card next-card" id="next-card" hidden>
         <div class="card-title">Nächster Schlaf</div>
         <div class="next-main">
-          <div class="next-icon" id="next-icon">😴</div>
+          <div class="ww-ring" id="ww-ring">
+            <svg viewBox="0 0 100 100" aria-hidden="true">
+              <circle class="ww-track" cx="50" cy="50" r="44"></circle>
+              <circle class="ww-prog" id="ww-prog" cx="50" cy="50" r="44"></circle>
+            </svg>
+            <span class="next-icon" id="next-icon">😴</span>
+          </div>
           <div class="next-body">
             <div class="next-time" id="next-time">–</div>
             <div class="next-desc" id="next-desc"></div>
           </div>
         </div>
+        <div class="overtired" id="overtired" hidden></div>
         <div class="next-countdown" id="next-countdown" hidden>
           <span class="cd-label" id="cd-label">bis zum nächsten Schlaf</span>
           <span class="cd-value" id="cd-value">–</span>
@@ -56,6 +74,24 @@
         <div class="next-adjust" id="next-adjust" hidden></div>
         <div class="next-meta" id="next-meta"></div>
         <div class="confidence" id="confidence"></div>
+      </section>
+
+      <!-- Tages-Übersicht -->
+      <section class="card summary-card" id="summary-card" hidden>
+        <div class="card-title">Heute</div>
+        <div class="summary-tiles" id="summary-tiles"></div>
+        <div class="summary-hint" id="summary-hint"></div>
+      </section>
+
+      <!-- 7-Tage-Trend -->
+      <section class="card trend-card" id="trend-card" hidden>
+        <div class="card-title">Letzte 7 Tage</div>
+        <div class="trend-chart" id="trend-chart"></div>
+        <div class="trend-legend">
+          <span class="lg-item"><span class="lg-dot lg-nap"></span>Nickerchen</span>
+          <span class="lg-item"><span class="lg-dot lg-night"></span>Nacht</span>
+        </div>
+        <div class="trend-hint" id="trend-hint"></div>
       </section>
 
       <!-- Tagesplan -->
