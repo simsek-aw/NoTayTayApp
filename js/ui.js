@@ -226,28 +226,61 @@ function buildReport() {
 
 function renderStatus(pred) {
   const card = $('status-card');
+  const timer = $('status-timer');
+  const sub = $('status-sub');
   card.classList.toggle('asleep', pred.status === 'asleep');
   card.classList.toggle('awake', pred.status === 'awake');
 
   if (pred.status === 'asleep') {
+    // Baby schläft -> seit wann (live) + voraussichtliches Aufwachen
+    card.classList.remove('overdue');
+    delete card.dataset.nextTarget;
     const start = new Date(pred.active.start);
     $('status-label').textContent = pred.sleepType === 'night' ? '🌙 Schläft (Nacht)' : '😴 Schläft';
-    $('status-timer').textContent = elapsed(start);
-    $('status-timer').dataset.since = start.toISOString();
-    $('status-timer').dataset.mode = 'up';
-    $('status-sub').textContent = `eingeschlafen ${fmtClock(start)} · vor ${fmtDuration(Math.round((Date.now() - start) / 60000))}`;
+    timer.textContent = elapsed(start);
+    timer.dataset.since = start.toISOString();
+    timer.dataset.mode = 'up';
+    const wake = pred.prediction && pred.prediction.time;
+    sub.textContent = `seit ${fmtClock(start)}${wake ? ` · vrstl. wach ${fmtClock(wake)}` : ''}`;
+  } else if (pred.prediction && pred.prediction.kind === 'sleep') {
+    // Baby wach -> NÄCHSTES Ereignis im Mittelpunkt (Uhrzeit + in X / überfällig)
+    const p = pred.prediction;
+    delete timer.dataset.since; // kein Elapsed-Ticking mehr
+    $('status-label').textContent = p.type === 'night' ? '🌙 Schlafenszeit' : '😴 Nächstes Nickerchen';
+    timer.textContent = fmtTime(p.time);
+    card.dataset.nextTarget = p.time.toISOString();
+    card.dataset.awakeSince = pred.lastWake ? fmtClock(pred.lastWake) : '';
+    updateHeroStatus();
   } else {
+    // Fallback ohne Prognose
+    card.classList.remove('overdue');
+    delete card.dataset.nextTarget;
     $('status-label').textContent = '☀️ Wach';
     if (pred.lastWake) {
-      $('status-timer').textContent = elapsed(pred.lastWake);
-      $('status-timer').dataset.since = pred.lastWake.toISOString();
-      $('status-timer').dataset.mode = 'up';
-      $('status-sub').textContent = `wach seit ${fmtClock(pred.lastWake)} · vor ${fmtDuration(Math.round((Date.now() - pred.lastWake) / 60000))}`;
+      timer.textContent = elapsed(pred.lastWake);
+      timer.dataset.since = pred.lastWake.toISOString();
+      sub.textContent = `wach seit ${fmtClock(pred.lastWake)}`;
     } else {
-      $('status-timer').textContent = '–';
-      delete $('status-timer').dataset.since;
-      $('status-sub').textContent = 'Noch keine Daten';
+      timer.textContent = '–';
+      delete timer.dataset.since;
+      sub.textContent = 'Noch keine Daten';
     }
+  }
+}
+
+// Hero-Unterzeile live: "in 1 Std 10 Min" bzw. "⚠️ 11 Min überfällig"
+function updateHeroStatus() {
+  const card = $('status-card');
+  if (!card.dataset.nextTarget) return;
+  const diff = new Date(card.dataset.nextTarget) - new Date();
+  const since = card.dataset.awakeSince ? ` · wach seit ${card.dataset.awakeSince}` : '';
+  const sub = $('status-sub');
+  if (diff <= 0) {
+    card.classList.add('overdue');
+    sub.textContent = `⚠️ ${fmtDuration(Math.round(-diff / 60000))} überfällig${since}`;
+  } else {
+    card.classList.remove('overdue');
+    sub.textContent = `in ${fmtDuration(Math.round(diff / 60000))}${since}`;
   }
 }
 
@@ -330,19 +363,23 @@ function renderNext(pred) {
 
   const adjust = $('next-adjust');
   adjust.hidden = true;
+  const title = card.querySelector('.card-title');
 
   if (p.kind === 'wake') {
+    if (title) title.textContent = 'Voraussichtliches Aufwachen';
     $('next-icon').textContent = '🌅';
+    $('next-time').classList.remove('is-range');
     $('next-time').textContent = fmtClock(p.time);
     $('next-desc').textContent = p.label + (p.napNumber ? ` · ${p.napNumber}. Nickerchen läuft` : '');
     $('next-meta').textContent = `Fenster ${fmtTime(p.rangeStart)}–${fmtTime(p.rangeEnd)} Uhr`;
     $('cd-label').textContent = 'bis zum Aufwachen';
   } else {
+    if (title) title.textContent = 'Ideales Zeitfenster';
     $('next-icon').textContent = p.type === 'night' ? '🌙' : '😴';
-    $('next-time').textContent = fmtClock(p.time);
-    $('next-desc').textContent = p.label;
-    $('next-meta').textContent =
-      `Wachfenster ${fmtDuration(p.wakeWindow)} · ideales Fenster ${fmtTime(p.rangeStart)}–${fmtTime(p.rangeEnd)} Uhr`;
+    $('next-time').textContent = `${fmtTime(p.rangeStart)}–${fmtTime(p.rangeEnd)}`;
+    $('next-time').classList.add('is-range');
+    $('next-desc').textContent = `${p.label} · Wachfenster ${fmtDuration(p.wakeWindow)}`;
+    $('next-meta').textContent = '';
     $('cd-label').textContent = p.type === 'night' ? 'bis zur Schlafenszeit' : 'bis zum Nickerchen';
 
     // Hinweis auf Übermüdungs-Korrektur
@@ -612,6 +649,7 @@ function tickTimer() {
   if (t && t.dataset.since) {
     t.textContent = elapsed(new Date(t.dataset.since));
   }
+  updateHeroStatus();
   updateCountdown();
   updateWakeWindow();
 }

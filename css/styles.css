@@ -396,3 +396,9 @@ body.dim .app-main { padding-top: 40px; }
   #report { position: static; padding: 0; }
   .report-actions { display: none !important; }
 }
+
+/* ===== Hero "nächstes Ereignis" / überfällig ===== */
+.status-card.overdue .status-label { color: #ff9b6b; }
+.status-card.overdue .status-sub { color: #ff9b6b; font-weight: 700; }
+
+.next-time.is-range { font-size: 24px; letter-spacing: -0.5px; }
