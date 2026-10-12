@@ -40,40 +40,33 @@
     </div>
 
     <main class="app-main">
-      <!-- Großer Status: wach / schläft -->
-      <section class="status-card" id="status-card">
-        <div class="status-label" id="status-label">–</div>
-        <div class="status-timer" id="status-timer">00:00</div>
-        <div class="status-sub" id="status-sub"></div>
+      <!-- Tagesleiste (Monatstage) -->
+      <div class="date-strip" id="date-strip"></div>
+
+      <!-- Kreisdiagramm des Tages -->
+      <section class="clock" id="clock">
+        <svg class="clock-svg" viewBox="0 0 300 300" aria-hidden="true">
+          <path class="clock-track" id="clock-track" fill="none"></path>
+          <path class="clock-arc" id="clock-arc" fill="none"></path>
+        </svg>
+        <div class="clock-icons" id="clock-icons"></div>
+        <button class="clock-center" id="clock-center">
+          <div class="cc-label" id="cc-label">–</div>
+          <div class="cc-time" id="cc-time">–</div>
+          <div class="cc-sub" id="cc-sub"></div>
+        </button>
       </section>
 
-      <!-- Aktionsbuttons -->
-      <section class="actions" id="actions"></section>
+      <!-- Tracker: Timerleiste (aktiv) bzw. Start-Aktionen -->
+      <section class="tracker" id="tracker"></section>
 
-      <!-- Nächste Vorhersage -->
-      <section class="card next-card" id="next-card" hidden>
-        <div class="card-title">Nächster Schlaf</div>
-        <div class="next-main">
-          <div class="ww-ring" id="ww-ring">
-            <svg viewBox="0 0 100 100" aria-hidden="true">
-              <circle class="ww-track" cx="50" cy="50" r="44"></circle>
-              <circle class="ww-prog" id="ww-prog" cx="50" cy="50" r="44"></circle>
-            </svg>
-            <span class="next-icon" id="next-icon">😴</span>
-          </div>
-          <div class="next-body">
-            <div class="next-time" id="next-time">–</div>
-            <div class="next-desc" id="next-desc"></div>
-          </div>
+      <!-- Was an diesem Tag getrackt wurde -->
+      <section class="card today-card" id="today-card">
+        <div class="today-head">
+          <span class="card-title" id="today-title">Heute</span>
+          <button class="link-btn" id="today-add">+ Eintrag</button>
         </div>
-        <div class="overtired" id="overtired" hidden></div>
-        <div class="next-countdown" id="next-countdown" hidden>
-          <span class="cd-label" id="cd-label">bis zum nächsten Schlaf</span>
-          <span class="cd-value" id="cd-value">–</span>
-        </div>
-        <div class="next-adjust" id="next-adjust" hidden></div>
-        <div class="next-meta" id="next-meta"></div>
-        <div class="confidence" id="confidence"></div>
+        <ul class="today-list" id="today-list"></ul>
       </section>
 
       <!-- Schub-/Regressions-Hinweis -->

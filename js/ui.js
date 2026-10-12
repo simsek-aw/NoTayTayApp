@@ -9,7 +9,8 @@ const $ = (id) => document.getElementById(id);
 const pad = (n) => String(n).padStart(2, '0');
 
 function fmtTime(d) {
-  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  const x = d instanceof Date ? d : new Date(d);
+  return `${pad(x.getHours())}:${pad(x.getMinutes())}`;
 }
 function fmtClock(d) {
   return fmtTime(d) + ' Uhr';
@@ -156,9 +157,7 @@ export function render() {
   }
 
   const pred = predict(state.sessions, state.baby.birthDate);
-  renderStatus(pred);
-  renderActions(pred);
-  renderNext(pred);
+  renderHome(state, pred);
   renderShift(state);
   renderSummary(state, pred);
   renderTrends(state);
@@ -224,65 +223,286 @@ function buildReport() {
   document.getElementById('report-close').onclick = () => { report.hidden = true; };
 }
 
-function renderStatus(pred) {
-  const card = $('status-card');
-  const timer = $('status-timer');
-  const sub = $('status-sub');
-  card.classList.toggle('asleep', pred.status === 'asleep');
-  card.classList.toggle('awake', pred.status === 'awake');
+// ===========================================================================
+//  STARTSEITE: Tagesleiste + Kreisdiagramm + Zentrum + Tracker + Tagesliste
+// ===========================================================================
+let selectedDay = startOfDayLocal(new Date());
+let selectedIcon = null;
+let arcWake = null;
+let arcBed = null;
+let arcIsToday = true;
 
-  if (pred.status === 'asleep') {
-    // Baby schläft -> seit wann (live) + voraussichtliches Aufwachen
-    card.classList.remove('overdue');
-    delete card.dataset.nextTarget;
-    const start = new Date(pred.active.start);
-    $('status-label').textContent = pred.sleepType === 'night' ? '🌙 Schläft (Nacht)' : '😴 Schläft';
-    timer.textContent = elapsed(start);
-    timer.dataset.since = start.toISOString();
-    timer.dataset.mode = 'up';
-    const wake = pred.prediction && pred.prediction.time;
-    sub.textContent = `seit ${fmtClock(start)}${wake ? ` · vrstl. wach ${fmtClock(wake)}` : ''}`;
-  } else if (pred.prediction && pred.prediction.kind === 'sleep') {
-    // Baby wach -> NÄCHSTES Ereignis im Mittelpunkt (Uhrzeit + in X / überfällig)
-    const p = pred.prediction;
-    delete timer.dataset.since; // kein Elapsed-Ticking mehr
-    $('status-label').textContent = p.type === 'night' ? '🌙 Schlafenszeit' : '😴 Nächstes Nickerchen';
-    timer.textContent = fmtTime(p.time);
-    card.dataset.nextTarget = p.time.toISOString();
-    card.dataset.awakeSince = pred.lastWake ? fmtClock(pred.lastWake) : '';
-    updateHeroStatus();
-  } else {
-    // Fallback ohne Prognose
-    card.classList.remove('overdue');
-    delete card.dataset.nextTarget;
-    $('status-label').textContent = '☀️ Wach';
-    if (pred.lastWake) {
-      timer.textContent = elapsed(pred.lastWake);
-      timer.dataset.since = pred.lastWake.toISOString();
-      sub.textContent = `wach seit ${fmtClock(pred.lastWake)}`;
-    } else {
-      timer.textContent = '–';
-      delete timer.dataset.since;
-      sub.textContent = 'Noch keine Daten';
+function startOfDayLocal(d) { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; }
+function sameDayLocal(a, b) {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
+
+// Kreis-Geometrie: Wachtag als 240°-Bogen (Aufwachen unten-links -> über oben
+// -> Schlafenszeit unten-rechts); unten bleibt die Nachtlücke.
+const CLK_R = 120;
+const CLK_C = 150;
+function clkAngle(f) { return (210 - 240 * Math.max(0, Math.min(1, f))) * Math.PI / 180; }
+function clkPt(f) { const a = clkAngle(f); return [CLK_C + CLK_R * Math.cos(a), CLK_C - CLK_R * Math.sin(a)]; }
+function clkArc(f0, f1) {
+  if (f1 <= f0 + 0.001) return '';
+  const [x0, y0] = clkPt(f0); const [x1, y1] = clkPt(f1);
+  const large = 240 * (f1 - f0) > 180 ? 1 : 0;
+  return `M ${x0.toFixed(1)} ${y0.toFixed(1)} A ${CLK_R} ${CLK_R} 0 ${large} 1 ${x1.toFixed(1)} ${y1.toFixed(1)}`;
+}
+function clkIconPos(f) { const a = clkAngle(f); return { left: 50 + 40 * Math.cos(a), top: 50 - 40 * Math.sin(a) }; }
+
+function renderHome(state, pred) {
+  renderDateStrip();
+  const m = dayModel(state, pred);
+  renderClock(state, pred, m);
+  renderTracker(state, pred);
+  renderTodayList(state);
+}
+
+function renderDateStrip() {
+  const strip = $('date-strip');
+  strip.innerHTML = '';
+  const today = startOfDayLocal(new Date());
+  const wk = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
+  for (let i = 13; i >= 0; i--) {
+    const d = new Date(today); d.setDate(today.getDate() - i);
+    const btn = document.createElement('button');
+    btn.className = 'date-pill' + (sameDayLocal(d, selectedDay) ? ' sel' : '') + (sameDayLocal(d, today) ? ' is-today' : '');
+    btn.innerHTML = `<span class="dp-dow">${wk[d.getDay()]}</span><span class="dp-num">${d.getDate()}</span>`;
+    btn.onclick = () => { selectedDay = startOfDayLocal(d); selectedIcon = null; render(); };
+    strip.appendChild(btn);
+  }
+  strip.scrollLeft = strip.scrollWidth;
+}
+
+function dayModel(state, pred) {
+  const day = selectedDay;
+  const isToday = sameDayLocal(day, new Date());
+  const ss = state.sessions;
+  const morningNight = ss.filter((s) => s.type === 'night' && s.end && sameDayLocal(new Date(s.end), day))
+    .sort((a, b) => new Date(b.end) - new Date(a.end))[0];
+  const naps = ss.filter((s) => s.type === 'nap' && sameDayLocal(new Date(s.start), day))
+    .sort((a, b) => new Date(a.start) - new Date(b.start));
+  let wake = morningNight ? new Date(morningNight.end)
+    : naps.length ? new Date(new Date(naps[0].start).getTime() - 3 * 3600000)
+    : new Date(startOfDayLocal(day).getTime() + 7.5 * 3600000);
+  const nightStart = ss.filter((s) => s.type === 'night' && sameDayLocal(new Date(s.start), day))
+    .sort((a, b) => new Date(a.start) - new Date(b.start))[0];
+  const predNaps = [];
+  let predBed = null;
+  if (isToday && pred.plan) {
+    for (const it of pred.plan) {
+      if (it.type === 'nap') predNaps.push(new Date(it.onset));
+      else if (it.type === 'night') predBed = new Date(it.onset);
     }
   }
+  const bed = nightStart ? new Date(nightStart.start) : (predBed || new Date(wake.getTime() + 13 * 3600000));
+  return { day, isToday, wake, bed, naps, nightStart, predNaps };
 }
 
-// Hero-Unterzeile live: "in 1 Std 10 Min" bzw. "⚠️ 11 Min überfällig"
-function updateHeroStatus() {
-  const card = $('status-card');
-  if (!card.dataset.nextTarget) return;
-  const diff = new Date(card.dataset.nextTarget) - new Date();
-  const since = card.dataset.awakeSince ? ` · wach seit ${card.dataset.awakeSince}` : '';
-  const sub = $('status-sub');
-  if (diff <= 0) {
-    card.classList.add('overdue');
-    sub.textContent = `⚠️ ${fmtDuration(Math.round(-diff / 60000))} überfällig${since}`;
+function renderClock(state, pred, m) {
+  arcWake = m.wake; arcBed = m.bed; arcIsToday = m.isToday;
+  $('clock-track').setAttribute('d', clkArc(0, 1));
+  const wrap = $('clock-icons');
+  wrap.innerHTML = '';
+  const span = (m.bed - m.wake) || 1;
+  const fOf = (t) => (new Date(t) - m.wake) / span;
+  const now = new Date();
+  const addIcon = (f, emoji, cls, data) => {
+    const p = clkIconPos(f);
+    const el = document.createElement('button');
+    el.className = 'clock-ic ' + cls;
+    el.style.left = p.left + '%';
+    el.style.top = p.top + '%';
+    el.textContent = emoji;
+    el.onclick = () => { selectedIcon = data; renderClockCenter(state, pred, m); vibrate(6); };
+    wrap.appendChild(el);
+  };
+  addIcon(0, '🌅', 'done', { kind: 'wake', time: m.wake });
+  for (const nap of m.naps) {
+    addIcon(fOf(nap.start), '😴', nap.end ? 'done' : 'active', { kind: 'nap', start: nap.start, end: nap.end });
+  }
+  if (m.isToday) {
+    for (const t of m.predNaps) {
+      if (t > now) addIcon(fOf(t), '😴', 'pred', { kind: 'prednap', time: t });
+    }
+  }
+  addIcon(1, '🌙', m.nightStart ? 'done' : 'pred', {
+    kind: 'bed', time: m.bed,
+    start: m.nightStart ? m.nightStart.start : null,
+    end: m.nightStart ? m.nightStart.end : null,
+  });
+  renderClockCenter(state, pred, m);
+  updateArc();
+}
+
+function setCenter(label, timeTxt, subTxt, isRange) {
+  $('cc-label').textContent = label;
+  $('cc-time').textContent = timeTxt;
+  $('cc-time').classList.toggle('cc-range', !!isRange);
+  $('cc-sub').textContent = subTxt || '';
+}
+
+function renderClockCenter(state, pred, m) {
+  const center = $('clock-center');
+  center.classList.remove('overdue');
+  delete center.dataset.mode; delete center.dataset.start; delete center.dataset.target;
+
+  if (selectedIcon) {
+    const s = selectedIcon;
+    if (s.kind === 'nap' && !s.end) {
+      center.dataset.mode = 'active'; center.dataset.start = new Date(s.start).toISOString();
+      setCenter('😴 Nickerchen läuft', elapsed(new Date(s.start)), `seit ${fmtClock(s.start)}`);
+    } else if (s.kind === 'nap') {
+      setCenter('😴 Nickerchen', `${fmtTime(s.start)}–${fmtTime(s.end)}`, fmtDuration(Math.round((new Date(s.end) - new Date(s.start)) / 60000)), true);
+    } else if (s.kind === 'bed') {
+      if (s.end) setCenter('🌙 Nacht', `${fmtTime(s.start)}–${fmtTime(s.end)}`, fmtDuration(Math.round((new Date(s.end) - new Date(s.start)) / 60000)), true);
+      else setCenter('🌙 Schlafenszeit', fmtTime(s.time), 'Prognose');
+    } else if (s.kind === 'wake') {
+      setCenter('🌅 Aufwachen', fmtTime(s.time), '');
+    } else {
+      setCenter('😴 Nickerchen', fmtTime(s.time), 'Prognose');
+    }
+    return;
+  }
+
+  if (m.isToday) {
+    if (pred.status === 'asleep') {
+      center.dataset.mode = 'active'; center.dataset.start = new Date(pred.active.start).toISOString();
+      setCenter(pred.sleepType === 'night' ? '🌙 Schläft (Nacht)' : '😴 Schläft', elapsed(new Date(pred.active.start)),
+        pred.prediction ? `ca. bis ${fmtClock(pred.prediction.time)}` : '');
+    } else if (pred.prediction && pred.prediction.kind === 'sleep') {
+      const p = pred.prediction;
+      const stale = pred.lastWake && new Date(pred.lastWake) < startOfDayLocal(new Date());
+      if (stale) {
+        // Neuer Tag, heute noch nichts getrackt -> freundlicher Hinweis statt "12h überfällig"
+        setCenter('☀️ Neuer Tag', '–', 'Noch nichts getrackt – unten starten');
+      } else {
+        center.dataset.mode = 'next'; center.dataset.target = p.time.toISOString();
+        setCenter(p.type === 'night' ? '🌙 Schlafenszeit' : '😴 Nächstes Nickerchen', fmtTime(p.time), '');
+        updateHomeTick();
+      }
+    } else {
+      setCenter('☀️ Wach', '–', '');
+    }
   } else {
-    card.classList.remove('overdue');
-    sub.textContent = `in ${fmtDuration(Math.round(diff / 60000))}${since}`;
+    const napMin = m.naps.filter((n) => n.end).reduce((a, n) => a + (new Date(n.end) - new Date(n.start)) / 60000, 0);
+    const nightTxt = m.nightStart && m.nightStart.end
+      ? ` · Nacht ${fmtDuration(Math.round((new Date(m.nightStart.end) - new Date(m.nightStart.start)) / 60000))}` : '';
+    setCenter('Tagesschlaf', napMin ? fmtShort(Math.round(napMin)) : '–', `${m.naps.length} Nickerchen${nightTxt}`, true);
   }
 }
+
+function renderTracker(state, pred) {
+  const el = $('tracker');
+  el.innerHTML = '';
+  delete el.dataset.start; delete el.dataset.target;
+  if (!sameDayLocal(selectedDay, new Date())) { el.hidden = true; return; }
+  el.hidden = false;
+  const active = state.sessions.find((s) => !s.end);
+  if (active) {
+    const start = new Date(active.start);
+    const isNight = active.type === 'night';
+    const target = pred.prediction && pred.prediction.kind === 'wake' ? new Date(pred.prediction.time) : null;
+    const bar = document.createElement('div');
+    bar.className = 'timer-bar';
+    bar.innerHTML = `
+      <div class="tb-row">
+        <span>${isNight ? '🌙' : '😴'} ${isNight ? 'Nacht' : 'Nickerchen'} läuft</span>
+        <span class="tb-time" id="tb-time">${elapsed(start)}</span>
+      </div>
+      <div class="tb-track"><div class="tb-fill" id="tb-fill"></div></div>
+      <div class="tb-sub">seit ${fmtClock(start)}${target ? ` · ca. bis ${fmtClock(target)}` : ''}</div>`;
+    el.appendChild(bar);
+    el.dataset.start = start.toISOString();
+    if (target) el.dataset.target = target.toISOString();
+    el.appendChild(bigBtn(isNight ? '🌅 Aufgewacht (Nacht beenden)' : '⏹ Nickerchen beenden', () => {
+      const s = store.stop(); vibrate(); render();
+      toast('Aufgewacht — gut geschlafen! 👶', () => { store.updateSession(s.id, { end: null }); render(); });
+    }));
+  } else {
+    el.appendChild(bigBtn('😴 Nickerchen starten', () => {
+      const s = store.start('nap'); vibrate(); render();
+      toast('Nickerchen gestartet', () => { store.removeSession(s.id); render(); });
+    }));
+    const night = document.createElement('button');
+    night.className = 'btn btn-ghost btn-block';
+    night.textContent = '🌙 Schlafenszeit (Nacht) starten';
+    night.onclick = () => {
+      const s = store.start('night'); vibrate(); render();
+      toast('Gute Nacht! 🌙', () => { store.removeSession(s.id); render(); });
+    };
+    el.appendChild(night);
+    el.appendChild(quickChips([10, 20, 30], (min) => {
+      const s = store.start('nap', new Date(Date.now() - min * 60000)); vibrate(); render();
+      toast(`Nickerchen vor ${min} Min gestartet`, () => { store.removeSession(s.id); render(); });
+    }, 'eingeschlafen vor'));
+  }
+}
+
+function renderTodayList(state) {
+  $('today-title').textContent = sameDayLocal(selectedDay, new Date())
+    ? 'Heute' : selectedDay.toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: '2-digit' });
+  const list = $('today-list');
+  list.innerHTML = '';
+  const items = state.sessions.filter((s) =>
+    (s.type === 'nap' && sameDayLocal(new Date(s.start), selectedDay))
+    || (s.type === 'night' && (sameDayLocal(new Date(s.start), selectedDay) || (s.end && sameDayLocal(new Date(s.end), selectedDay))))
+  ).sort((a, b) => new Date(a.start) - new Date(b.start));
+  if (!items.length) { list.innerHTML = '<li class="today-empty">Noch nichts getrackt.</li>'; return; }
+  for (const s of items) {
+    const li = document.createElement('li');
+    li.className = 'history-item';
+    const icon = s.type === 'night' ? '🌙' : '😴';
+    const label = s.type === 'night' ? 'Nacht' : 'Nickerchen';
+    let txt;
+    if (s.end) {
+      const mins = Math.round((new Date(s.end) - new Date(s.start)) / 60000);
+      txt = `${fmtTime(s.start)}–${fmtTime(s.end)} · ${fmtDuration(mins)}`;
+    } else txt = `${fmtTime(s.start)} · läuft …`;
+    li.innerHTML = `
+      <span class="hi-icon">${icon}</span>
+      <div class="hi-body"><div class="hi-title">${label}</div><div class="hi-sub">${txt}</div></div>
+      <button class="icon-btn hi-edit" aria-label="Bearbeiten">✎</button>`;
+    li.querySelector('.hi-edit').onclick = () => openManual(s);
+    list.appendChild(li);
+  }
+}
+
+function updateArc() {
+  const arc = $('clock-arc');
+  if (!arc || !arcWake || !arcBed) return;
+  if (!arcIsToday) { arc.setAttribute('d', clkArc(0, 1)); return; }
+  const span = arcBed - arcWake;
+  arc.setAttribute('d', clkArc(0, Math.max(0, Math.min(1, (Date.now() - arcWake) / span))));
+}
+
+// Live-Aktualisierung (jede Sekunde)
+function updateHomeTick() {
+  const center = $('clock-center');
+  if (center) {
+    const mode = center.dataset.mode;
+    if (mode === 'active' && center.dataset.start) {
+      $('cc-time').textContent = elapsed(new Date(center.dataset.start));
+    } else if (mode === 'next' && center.dataset.target) {
+      const diff = new Date(center.dataset.target) - new Date();
+      if (diff <= 0) { center.classList.add('overdue'); $('cc-sub').textContent = `⚠️ ${fmtDuration(Math.round(-diff / 60000))} überfällig`; }
+      else { center.classList.remove('overdue'); $('cc-sub').textContent = `in ${fmtDuration(Math.round(diff / 60000))}`; }
+    }
+  }
+  const tr = $('tracker');
+  if (tr && tr.dataset.start) {
+    const t = document.getElementById('tb-time');
+    if (t) t.textContent = elapsed(new Date(tr.dataset.start));
+    const fill = document.getElementById('tb-fill');
+    if (fill && tr.dataset.target) {
+      const total = new Date(tr.dataset.target) - new Date(tr.dataset.start);
+      fill.style.width = (Math.max(0, Math.min(1, (Date.now() - new Date(tr.dataset.start)) / total)) * 100).toFixed(1) + '%';
+    }
+  }
+  updateArc();
+}
+
 
 function bigBtn(label, onclick) {
   const b = document.createElement('button');
@@ -304,116 +524,6 @@ function quickChips(mins, handler, prefix) {
   return wrap;
 }
 
-function renderActions(pred) {
-  const el = $('actions');
-  el.innerHTML = '';
-
-  if (pred.status === 'asleep') {
-    el.appendChild(bigBtn(pred.sleepType === 'night' ? '🌅 Aufgewacht (Nacht beenden)' : '⏹ Nickerchen beenden', () => {
-      const s = store.stop();
-      vibrate();
-      render();
-      toast('Aufgewacht — gut geschlafen! 👶', () => { store.updateSession(s.id, { end: null }); render(); });
-    }));
-    el.appendChild(quickChips([5, 10, 20], (min) => {
-      const s = store.stop(new Date(Date.now() - min * 60000));
-      vibrate();
-      render();
-      toast(`Aufgewacht (vor ${min} Min)`, () => { store.updateSession(s.id, { end: null }); render(); });
-    }, 'aufgewacht vor'));
-  } else {
-    el.appendChild(bigBtn('😴 Nickerchen starten', () => {
-      const s = store.start('nap');
-      vibrate();
-      render();
-      toast('Nickerchen gestartet', () => { store.removeSession(s.id); render(); });
-    }));
-
-    const night = document.createElement('button');
-    night.className = 'btn btn-ghost btn-block';
-    night.textContent = '🌙 Schlafenszeit (Nacht) starten';
-    night.onclick = () => {
-      const s = store.start('night');
-      vibrate();
-      render();
-      toast('Gute Nacht! 🌙', () => { store.removeSession(s.id); render(); });
-    };
-    el.appendChild(night);
-
-    el.appendChild(quickChips([10, 20, 30], (min) => {
-      const s = store.start('nap', new Date(Date.now() - min * 60000));
-      vibrate();
-      render();
-      toast(`Nickerchen vor ${min} Min gestartet`, () => { store.removeSession(s.id); render(); });
-    }, 'eingeschlafen vor'));
-  }
-
-  const manual = document.createElement('button');
-  manual.className = 'link-btn';
-  manual.textContent = '+ Eintrag manuell hinzufügen';
-  manual.onclick = () => openManual(null);
-  el.appendChild(manual);
-}
-
-function renderNext(pred) {
-  const card = $('next-card');
-  if (!pred.prediction) { card.hidden = true; return; }
-  card.hidden = false;
-  const p = pred.prediction;
-
-  const adjust = $('next-adjust');
-  adjust.hidden = true;
-  const title = card.querySelector('.card-title');
-
-  if (p.kind === 'wake') {
-    if (title) title.textContent = 'Voraussichtliches Aufwachen';
-    $('next-icon').textContent = '🌅';
-    $('next-time').classList.remove('is-range');
-    $('next-time').textContent = fmtClock(p.time);
-    $('next-desc').textContent = p.label + (p.napNumber ? ` · ${p.napNumber}. Nickerchen läuft` : '');
-    $('next-meta').textContent = `Fenster ${fmtTime(p.rangeStart)}–${fmtTime(p.rangeEnd)} Uhr`;
-    $('cd-label').textContent = 'bis zum Aufwachen';
-  } else {
-    if (title) title.textContent = 'Ideales Zeitfenster';
-    $('next-icon').textContent = p.type === 'night' ? '🌙' : '😴';
-    $('next-time').textContent = `${fmtTime(p.rangeStart)}–${fmtTime(p.rangeEnd)}`;
-    $('next-time').classList.add('is-range');
-    $('next-desc').textContent = `${p.label} · Wachfenster ${fmtDuration(p.wakeWindow)}`;
-    $('next-meta').textContent = '';
-    $('cd-label').textContent = p.type === 'night' ? 'bis zur Schlafenszeit' : 'bis zum Nickerchen';
-
-    // Hinweis auf Übermüdungs-Korrektur
-    if (p.adjustment === 'short') {
-      adjust.hidden = false;
-      adjust.textContent = '⚡ Wachfenster verkürzt – das letzte Nickerchen war kurz.';
-    } else if (p.adjustment === 'long') {
-      adjust.hidden = false;
-      adjust.textContent = '💤 Wachfenster etwas verlängert – das letzte Nickerchen war besonders lang.';
-    }
-  }
-
-  // Live-Countdown + Wachfenster-Ring vorbereiten
-  const cd = $('next-countdown');
-  cd.hidden = false;
-  cd.dataset.target = p.time.toISOString();
-
-  const ring = $('ww-ring');
-  const ringStart = p.kind === 'wake'
-    ? (pred.active ? new Date(pred.active.start) : p.time)
-    : pred.lastWake;
-  ring.dataset.start = ringStart ? new Date(ringStart).toISOString() : '';
-  ring.dataset.target = p.time.toISOString();
-  ring.dataset.kind = p.kind; // 'sleep' (wach, zählt zum Schlaf) | 'wake' (schläft)
-  $('overtired').hidden = true;
-
-  updateCountdown();
-  updateWakeWindow();
-
-  const conf = $('confidence');
-  const level = p.confidence;
-  conf.textContent = `Genauigkeit: ${level}`;
-  conf.className = 'confidence conf-' + (level === 'hoch' ? 'high' : level === 'mittel' ? 'mid' : 'low');
-}
 
 // ---------------------------------------------------------------------------
 //  Tages-Übersicht & 7-Tage-Trend
@@ -642,80 +752,19 @@ function openManual(session) {
 function closeManual() { $('manual').hidden = true; editingId = null; }
 
 // ---------------------------------------------------------------------------
-//  Live-Timer (Statusanzeige jede Sekunde aktualisieren)
+//  Live-Timer (Startseite jede Sekunde aktualisieren)
 // ---------------------------------------------------------------------------
 function tickTimer() {
-  const t = $('status-timer');
-  if (t && t.dataset.since) {
-    t.textContent = elapsed(new Date(t.dataset.since));
-  }
-  updateHeroStatus();
-  updateCountdown();
-  updateWakeWindow();
-}
-
-// Live-Countdown bis zur nächsten Schlaf-/Aufwachzeit aktualisieren
-function updateCountdown() {
-  const cd = $('next-countdown');
-  if (!cd || cd.hidden || !cd.dataset.target) return;
-  const diff = new Date(cd.dataset.target) - new Date();
-  const val = $('cd-value');
-  if (diff <= 0) {
-    val.textContent = 'jetzt';
-    cd.classList.add('cd-now');
-    return;
-  }
-  cd.classList.remove('cd-now');
-  const s = Math.floor(diff / 1000);
-  const h = Math.floor(s / 3600);
-  const m = Math.floor((s % 3600) / 60);
-  const sec = s % 60;
-  val.textContent = h > 0 ? `${h}:${pad(m)}:${pad(sec)}` : `${m}:${pad(sec)}`;
-}
-
-// Wachfenster-Ring (Ampel) + Übermüdungs-Banner live aktualisieren
-const RING_C = 2 * Math.PI * 44; // Umfang des Fortschritts-Kreises
-function updateWakeWindow() {
-  const ring = $('ww-ring');
-  if (!ring || !ring.dataset.start || !ring.dataset.target) return;
-  const prog = $('ww-prog');
-  const over = $('overtired');
-  const cd = $('next-countdown');
-  const start = new Date(ring.dataset.start).getTime();
-  const target = new Date(ring.dataset.target).getTime();
-  const now = Date.now();
-  const total = target - start;
-  let frac = total > 0 ? (now - start) / total : 1;
-  frac = Math.max(0, Math.min(1, frac));
-  prog.style.strokeDashoffset = String(RING_C * (1 - frac));
-
-  ring.classList.remove('ring-green', 'ring-amber', 'ring-red', 'ring-sleep');
-  cd.classList.remove('cd-red');
-
-  if (ring.dataset.kind === 'wake') {
-    ring.classList.add('ring-sleep'); // Baby schläft: Fortschritt bis zum Aufwachen
-    over.hidden = true;
-    return;
-  }
-  // Baby wach: Wachfenster-Ampel grün → gelb → rot
-  if (now >= target) {
-    ring.classList.add('ring-red');
-    cd.classList.add('cd-red');
-    over.hidden = false;
-    over.textContent = `⚠️ Übermüdungs-Gefahr – ideales Fenster seit ${fmtDuration(Math.round((now - target) / 60000))} überschritten.`;
-  } else if (frac >= 0.8) {
-    ring.classList.add('ring-amber');
-    over.hidden = true;
-  } else {
-    ring.classList.add('ring-green');
-    over.hidden = true;
-  }
+  updateHomeTick();
 }
 
 // ---------------------------------------------------------------------------
 //  Event-Bindung
 // ---------------------------------------------------------------------------
 export function bindEvents() {
+  // Startseite
+  $('today-add').onclick = () => openManual(null);
+
   // Einstellungen
   $('settings-btn').onclick = () => {
     $('sync-code').value = store.getFamilyCode() || '';

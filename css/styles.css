@@ -402,3 +402,56 @@ body.dim .app-main { padding-top: 40px; }
 .status-card.overdue .status-sub { color: #ff9b6b; font-weight: 700; }
 
 .next-time.is-range { font-size: 24px; letter-spacing: -0.5px; }
+
+/* ===== Startseite: Tagesleiste ===== */
+.date-strip { display: flex; gap: 8px; overflow-x: auto; padding: 2px 0 6px; margin-bottom: 4px; scrollbar-width: none; }
+.date-strip::-webkit-scrollbar { display: none; }
+.date-pill {
+  flex: 0 0 auto; width: 46px; padding: 8px 0; border-radius: 14px; border: 1px solid var(--line);
+  background: var(--card); color: var(--muted); display: flex; flex-direction: column; align-items: center; gap: 2px; cursor: pointer;
+}
+.date-pill .dp-dow { font-size: 11px; }
+.date-pill .dp-num { font-size: 16px; font-weight: 700; color: var(--text); }
+.date-pill.sel { background: linear-gradient(135deg, var(--accent), var(--accent-2)); border-color: transparent; }
+.date-pill.sel .dp-dow, .date-pill.sel .dp-num { color: #fff; }
+.date-pill.is-today:not(.sel) .dp-num { color: var(--accent-2); }
+
+/* ===== Startseite: Kreisdiagramm ===== */
+.clock { position: relative; width: 100%; max-width: 330px; margin: 6px auto 10px; aspect-ratio: 1; }
+.clock-svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.clock-track { stroke: rgba(255,255,255,0.08); stroke-width: 6; stroke-linecap: round; }
+.clock-arc { stroke: var(--accent-2); stroke-width: 6; stroke-linecap: round; filter: drop-shadow(0 0 6px rgba(200,162,255,0.5)); transition: d .4s; }
+.clock-icons { position: absolute; inset: 0; }
+.clock-ic {
+  position: absolute; transform: translate(-50%, -50%); width: 44px; height: 44px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center; font-size: 20px; cursor: pointer;
+  background: var(--card-solid); border: 1px solid var(--line);
+}
+.clock-ic.done { border-color: rgba(200,162,255,0.5); }
+.clock-ic.pred { opacity: 0.6; border-style: dashed; border-color: var(--awake); }
+.clock-ic.active { border-color: var(--asleep); box-shadow: 0 0 0 4px rgba(127,180,255,0.25); animation: icpulse 1.6s ease-in-out infinite; }
+@keyframes icpulse { 0%,100% { box-shadow: 0 0 0 3px rgba(127,180,255,0.18); } 50% { box-shadow: 0 0 0 7px rgba(127,180,255,0.05); } }
+.clock-center {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 60%;
+  background: none; border: none; color: inherit; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 2px;
+}
+.cc-label { font-size: 14px; color: var(--muted); font-weight: 600; }
+.cc-time { font-size: 46px; font-weight: 800; letter-spacing: -1.5px; color: var(--text); line-height: 1.05; }
+.cc-time.cc-range { font-size: 30px; letter-spacing: -0.5px; }
+.cc-sub { font-size: 14px; color: var(--muted); }
+.clock-center.overdue .cc-label, .clock-center.overdue .cc-sub { color: #ff9b6b; font-weight: 700; }
+
+/* ===== Startseite: Tracker / Timerleiste ===== */
+.tracker { display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px; }
+.timer-bar { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; }
+.tb-row { display: flex; justify-content: space-between; align-items: center; font-size: 14px; font-weight: 600; color: var(--text); }
+.tb-time { font-variant-numeric: tabular-nums; font-weight: 800; color: var(--accent-2); }
+.tb-track { height: 8px; border-radius: 999px; background: rgba(255,255,255,0.08); margin: 10px 0 6px; overflow: hidden; }
+.tb-fill { height: 100%; width: 0; background: linear-gradient(90deg, var(--accent), var(--accent-2)); border-radius: 999px; transition: width .5s linear; }
+.tb-sub { font-size: 12.5px; color: var(--muted); }
+
+/* ===== Startseite: Tagesliste ===== */
+.today-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.today-head .card-title { margin: 0; }
+.today-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.today-empty { color: var(--muted); font-size: 13.5px; padding: 6px 0; }
