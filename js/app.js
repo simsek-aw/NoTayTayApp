@@ -11,6 +11,12 @@ render();
 store.subscribe(() => render());
 window.addEventListener('storage', () => location.reload());
 
+// Familien-Sync automatisch wiederherstellen, falls ein Code gespeichert ist
+const savedCode = store.getFamilyCode();
+if (savedCode && store.syncAvailable()) {
+  store.connectSync(savedCode).then((ok) => { if (ok) render(); });
+}
+
 // Service Worker für Offline-Betrieb / Installierbarkeit
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {

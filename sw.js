@@ -1,7 +1,7 @@
 // ============================================================================
 //  Service Worker — Offline-Cache (App-Shell)
 // ============================================================================
-const CACHE = 'schlummer-v1';
+const CACHE = 'schlummer-v12';
 const ASSETS = [
   './',
   './index.html',
@@ -10,6 +10,11 @@ const ASSETS = [
   './js/ui.js',
   './js/store.js',
   './js/engine.js',
+  './js/sync.js',
+  './js/notify.js',
+  './js/i18n.js',
+  './js/seed-data.js',
+  './js/firebase-config.js',
   './manifest.webmanifest',
   './icons/icon-192.png',
   './icons/icon-512.png',
@@ -32,16 +37,19 @@ self.addEventListener('activate', (e) => {
 // Cache-first für App-Shell, Netzwerk-Fallback (mit Nachcachen)
 self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return;
+  // Externe Anfragen (Firebase-SDK vom CDN, Firestore) NICHT abfangen —
+  // die brauchen direkten Netzwerkzugriff (u. a. WebSockets/Long-Polling).
+  const url = new URL(e.request.url);
+  if (url.origin !== self.location.origin) return;
+  // Netzwerk zuerst: online immer die aktuelle Version (Updates von Code &
+  // Config setzen sich sofort durch); offline dient der Cache als Fallback.
   e.respondWith(
-    caches.match(e.request).then((cached) => {
-      if (cached) return cached;
-      return fetch(e.request)
-        .then((res) => {
-          const copy = res.clone();
-          caches.open(CACHE).then((c) => c.put(e.request, copy)).catch(() => {});
-          return res;
-        })
-        .catch(() => caches.match('./index.html'));
-    })
+    fetch(e.request)
+      .then((res) => {
+        const copy = res.clone();
+        caches.open(CACHE).then((c) => c.put(e.request, copy)).catch(() => {});
+        return res;
+      })
+      .catch(() => caches.match(e.request).then((cached) => cached || caches.match('./index.html')))
   );
 });

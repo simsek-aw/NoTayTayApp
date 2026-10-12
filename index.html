@@ -25,85 +25,160 @@
           <div class="baby-age" id="baby-age"></div>
         </div>
       </div>
-      <button class="icon-btn" id="settings-btn" aria-label="Einstellungen">⚙️</button>
+      <div class="header-actions">
+        <button class="icon-btn lang-btn" id="lang-btn" aria-label="Sprache / Dil">TR</button>
+        <button class="icon-btn" id="dim-btn" data-i18n-aria="aria_nightmode" aria-label="Nachtmodus">🌙</button>
+        <button class="icon-btn" id="settings-btn" data-i18n-aria="aria_settings" aria-label="Einstellungen">⚙️</button>
+      </div>
     </header>
 
+    <div class="install-banner" id="install-banner" hidden>
+      <span id="install-text">📲 Zum Startbildschirm hinzufügen für den App-Start.</span>
+      <div class="install-btns">
+        <button class="btn btn-primary" id="install-btn" data-i18n="install_add">Hinzufügen</button>
+        <button class="icon-btn" id="install-dismiss" data-i18n-aria="aria_close" aria-label="Schließen">✕</button>
+      </div>
+    </div>
+
     <main class="app-main">
-      <!-- Großer Status: wach / schläft -->
-      <section class="status-card" id="status-card">
-        <div class="status-label" id="status-label">–</div>
-        <div class="status-timer" id="status-timer">00:00</div>
-        <div class="status-sub" id="status-sub"></div>
+      <!-- Tagesleiste (Monatstage) -->
+      <div class="date-strip" id="date-strip"></div>
+
+      <!-- Kreisdiagramm des Tages -->
+      <section class="clock" id="clock">
+        <svg class="clock-svg" viewBox="0 0 300 300" aria-hidden="true">
+          <path class="clock-track" id="clock-track" fill="none"></path>
+          <path class="clock-arc" id="clock-arc" fill="none"></path>
+        </svg>
+        <div class="clock-icons" id="clock-icons"></div>
+        <button class="clock-center" id="clock-center">
+          <div class="cc-label" id="cc-label">–</div>
+          <div class="cc-time" id="cc-time">–</div>
+          <div class="cc-sub" id="cc-sub"></div>
+        </button>
       </section>
 
-      <!-- Aktionsbuttons -->
-      <section class="actions" id="actions"></section>
+      <!-- Tracker: Timerleiste (aktiv) bzw. Start-Aktionen -->
+      <section class="tracker" id="tracker"></section>
 
-      <!-- Nächste Vorhersage -->
-      <section class="card next-card" id="next-card" hidden>
-        <div class="card-title">Nächster Schlaf</div>
-        <div class="next-main">
-          <div class="next-icon" id="next-icon">😴</div>
-          <div class="next-body">
-            <div class="next-time" id="next-time">–</div>
-            <div class="next-desc" id="next-desc"></div>
-          </div>
+      <!-- Was an diesem Tag getrackt wurde -->
+      <section class="card today-card" id="today-card">
+        <div class="today-head">
+          <span class="card-title" id="today-title">Heute</span>
+          <button class="link-btn" id="today-add" data-i18n="entry_add">+ Eintrag</button>
         </div>
-        <div class="next-meta" id="next-meta"></div>
-        <div class="confidence" id="confidence"></div>
+        <ul class="today-list" id="today-list"></ul>
+      </section>
+
+      <!-- Schub-/Regressions-Hinweis -->
+      <div class="shift-banner" id="shift-banner" hidden></div>
+
+      <!-- Tages-Übersicht -->
+      <section class="card summary-card" id="summary-card" hidden>
+        <div class="card-title" data-i18n="today">Heute</div>
+        <div class="summary-tiles" id="summary-tiles"></div>
+        <div class="summary-hint" id="summary-hint"></div>
+      </section>
+
+      <!-- 7-Tage-Trend -->
+      <section class="card trend-card" id="trend-card" hidden>
+        <div class="card-title" data-i18n="trend_title">Letzte 7 Tage</div>
+        <div class="trend-chart" id="trend-chart"></div>
+        <div class="trend-legend">
+          <span class="lg-item"><span class="lg-dot lg-nap"></span><span data-i18n="legend_nap">Nickerchen</span></span>
+          <span class="lg-item"><span class="lg-dot lg-night"></span><span data-i18n="legend_night">Nacht</span></span>
+        </div>
+        <div class="trend-hint" id="trend-hint"></div>
+      </section>
+
+      <!-- Prognose-Rückblick -->
+      <section class="card review-card" id="review-card" hidden>
+        <div class="card-title" data-i18n="review_title">Prognose-Rückblick (Nickerchen)</div>
+        <div class="review-stats" id="review-stats"></div>
+        <div class="review-chart" id="review-chart"></div>
+        <div class="review-hint" id="review-hint"></div>
+      </section>
+
+      <!-- Monats-Heatmap -->
+      <section class="card heat-card" id="heat-card" hidden>
+        <div class="card-title" data-i18n="heat_title">Schlaf-Kalender (Gesamt/Tag)</div>
+        <div class="heat-grid" id="heat-grid"></div>
+        <div class="heat-legend" id="heat-legend"></div>
       </section>
 
       <!-- Tagesplan -->
       <section class="card plan-card" id="plan-card" hidden>
-        <div class="card-title">Plan für den Tag</div>
+        <div class="card-title" data-i18n="plan_title">Plan für den Tag</div>
         <ul class="timeline" id="timeline"></ul>
-        <div class="plan-hint">Prognose auf Basis von Alter &amp; deinen bisherigen Aufzeichnungen.</div>
+        <div class="plan-hint" data-i18n="plan_hint">Prognose auf Basis von Alter &amp; deinen bisherigen Aufzeichnungen.</div>
       </section>
 
       <!-- Verlauf -->
       <section class="card history-card" id="history-card">
-        <div class="card-title">Verlauf</div>
+        <div class="card-title" data-i18n="history">Verlauf</div>
         <ul class="history" id="history"></ul>
-        <div class="empty-history" id="empty-history">Noch keine Einträge. Starte das erste Nickerchen!</div>
+        <div class="empty-history" id="empty-history" data-i18n="empty_history">Noch keine Einträge. Starte das erste Nickerchen!</div>
       </section>
     </main>
   </div>
 
   <!-- Onboarding -->
-  <div class="overlay" id="onboarding" hidden>
-    <div class="sheet">
-      <h2>Willkommen 👶</h2>
-      <p class="muted">Für möglichst genaue Vorhersagen brauchen wir das Geburtsdatum.</p>
-      <label>Name des Babys
-        <input type="text" id="ob-name" placeholder="z. B. Emma" />
-      </label>
-      <label>Geburtsdatum
-        <input type="date" id="ob-date" />
-      </label>
-      <button class="btn btn-primary btn-block" id="ob-save">Los geht's</button>
-    </div>
-  </div>
-
   <!-- Einstellungen -->
   <div class="overlay" id="settings" hidden>
     <div class="sheet">
       <div class="sheet-head">
-        <h2>Einstellungen</h2>
-        <button class="icon-btn" id="settings-close" aria-label="Schließen">✕</button>
+        <h2 data-i18n="settings">Einstellungen</h2>
+        <button class="icon-btn" id="settings-close" data-i18n-aria="aria_close" aria-label="Schließen">✕</button>
       </div>
-      <label>Name
-        <input type="text" id="set-name" />
-      </label>
-      <label>Geburtsdatum
-        <input type="date" id="set-date" />
-      </label>
+
+      <!-- Familien-Sync -->
+      <div class="sync-box">
+        <div class="sync-head">
+          <span data-i18n="sync_head">👨‍👩‍👧 Familien-Sync</span>
+          <span class="sync-badge" id="sync-badge">aus</span>
+        </div>
+        <p class="muted small" id="sync-intro" data-i18n="sync_intro">Gebt auf allen Handys denselben Code ein — dann seht ihr alle live dieselben Daten.</p>
+
+        <div id="sync-setup">
+          <label><span data-i18n="family_code">Familien-Code</span>
+            <input type="text" id="sync-code" data-i18n-ph="ph_code" placeholder="Code eingeben oder erzeugen" autocomplete="off" autocapitalize="characters" />
+          </label>
+          <div class="sync-btns">
+            <button class="btn" id="sync-gen" data-i18n="gen_code">🎲 Code erzeugen</button>
+            <button class="btn btn-primary" id="sync-connect" data-i18n="connect">Verbinden</button>
+          </div>
+        </div>
+
+        <div id="sync-connected" hidden>
+          <div class="sync-code-display"><span data-i18n="code_prefix">Code:</span> <strong id="sync-code-shown"></strong></div>
+          <div class="sync-btns">
+            <button class="btn" id="sync-copy" data-i18n="copy_code">📋 Code kopieren</button>
+            <button class="btn btn-danger" id="sync-disconnect" data-i18n="disconnect">Sync trennen</button>
+          </div>
+        </div>
+
+        <p class="muted small" id="sync-unavailable" data-i18n="sync_unavailable" hidden>⚠️ Sync ist noch nicht konfiguriert (Firebase-Zugang fehlt).</p>
+      </div>
+
+      <!-- Erinnerungen -->
+      <div class="sync-box">
+        <div class="sync-head">
+          <span data-i18n="notify_head">🔔 Erinnerungen</span>
+          <span class="sync-badge" id="notify-badge">aus</span>
+        </div>
+        <p class="muted small" data-i18n="notify_desc">Benachrichtigung 30 Minuten vor der nächsten Schlafphase.</p>
+        <div class="sync-btns">
+          <button class="btn btn-primary" id="notify-enable" data-i18n="notify_enable">Erinnerungen aktivieren</button>
+          <button class="btn" id="notify-disable" data-i18n="notify_disable" hidden>Ausschalten</button>
+        </div>
+        <p class="muted small" id="notify-unavailable" data-i18n="notify_unavailable" hidden>⚠️ Dieses Gerät/dieser Browser unterstützt keine Benachrichtigungen.</p>
+      </div>
+
       <div class="settings-actions">
-        <button class="btn" id="export-btn">Daten exportieren</button>
-        <button class="btn" id="import-btn">Daten importieren</button>
-        <input type="file" id="import-file" accept="application/json" hidden />
-        <button class="btn btn-danger" id="clear-btn">Alle Daten löschen</button>
+        <button class="btn" id="report-btn" data-i18n="report_btn">📄 Bericht für Kinderarzt</button>
+        <button class="btn btn-danger" id="clear-btn" data-i18n="reset_btn">Auf Startdaten zurücksetzen</button>
       </div>
-      <p class="muted small">Alle Daten werden nur lokal auf diesem Gerät gespeichert.</p>
+      <p class="muted small" data-i18n="local_note">Alle Daten werden nur lokal auf diesem Gerät gespeichert.</p>
     </div>
   </div>
 
@@ -112,23 +187,23 @@
     <div class="sheet">
       <div class="sheet-head">
         <h2 id="manual-title">Eintrag</h2>
-        <button class="icon-btn" id="manual-close" aria-label="Schließen">✕</button>
+        <button class="icon-btn" id="manual-close" data-i18n-aria="aria_close" aria-label="Schließen">✕</button>
       </div>
-      <label>Art
+      <label><span data-i18n="kind">Art</span>
         <select id="man-type">
-          <option value="nap">Nickerchen</option>
-          <option value="night">Nachtschlaf</option>
+          <option value="nap" data-i18n="naptype">Nickerchen</option>
+          <option value="night" data-i18n="nighttype">Nachtschlaf</option>
         </select>
       </label>
-      <label>Beginn
+      <label><span data-i18n="start">Beginn</span>
         <input type="datetime-local" id="man-start" />
       </label>
-      <label id="man-end-wrap">Ende <span class="muted small">(leer = läuft noch)</span>
+      <label id="man-end-wrap"><span data-i18n="end">Ende</span> <span class="muted small" data-i18n="end_hint">(leer = läuft noch)</span>
         <input type="datetime-local" id="man-end" />
       </label>
       <div class="sheet-actions">
-        <button class="btn btn-danger" id="man-delete" hidden>Löschen</button>
-        <button class="btn btn-primary" id="man-save">Speichern</button>
+        <button class="btn btn-danger" id="man-delete" data-i18n="del" hidden>Löschen</button>
+        <button class="btn btn-primary" id="man-save" data-i18n="save">Speichern</button>
       </div>
     </div>
   </div>

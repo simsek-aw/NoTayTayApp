@@ -113,13 +113,17 @@ export function buildCycles(sessions) {
   return cycles;
 }
 
-// Mittelwert eines Arrays (jüngere Zyklen stärker gewichtet)
+// Mittelwert eines Arrays mit AKTUALITÄTS-/TREND-Gewichtung.
+// Werte sind chronologisch (ältester zuerst). Neuere Tage werden exponentiell
+// stärker gewichtet – so folgt die Prognose automatisch dem Trend (z. B. länger
+// werdende Wachfenster bei Wachstum), statt alte Tage gleich stark zu zählen.
 function weightedMean(values) {
   if (!values.length) return null;
+  const base = 1.6; // >1 = neuere Werte dominieren
   let num = 0;
   let den = 0;
   values.forEach((v, i) => {
-    const w = i + 1; // spätere (neuere) Einträge stärker
+    const w = Math.pow(base, i);
     num += v * w;
     den += w;
   });
@@ -269,7 +273,22 @@ export function predict(sessions, birthDate, now = new Date()) {
   const wwIndex = Math.min(napsToday, windows.length - 1);
   const isNight = napsToday >= napTarget;
   const ww = windows[wwIndex];
-  const onset = new Date(lastWake.getTime() + ww.minutes * MIN);
+
+  // Übermüdungs-Korrektur: War das zuletzt beendete Nickerchen deutlich zu kurz,
+  // ist das Baby eher übermüdet -> nächstes Wachfenster verkürzen (früher schlafen).
+  // War es besonders lang/erholsam, kann es minimal länger wach bleiben.
+  let adjMinutes = ww.minutes;
+  let adjustment = null;
+  if (lastSession && lastSession.type === 'nap' && napsToday > 0) {
+    const lastNapDur = (new Date(lastSession.end) - new Date(lastSession.start)) / MIN;
+    const expected = napDurs[Math.min(napsToday - 1, napDurs.length - 1)].minutes;
+    if (expected > 0) {
+      const ratio = lastNapDur / expected;
+      if (ratio < 0.7) { adjMinutes = Math.round(ww.minutes * 0.85); adjustment = 'short'; }
+      else if (ratio > 1.3) { adjMinutes = Math.round(ww.minutes * 1.05); adjustment = 'long'; }
+    }
+  }
+  const onset = new Date(lastWake.getTime() + adjMinutes * MIN);
 
   result.status = 'awake';
   result.lastWake = lastWake;
@@ -279,7 +298,9 @@ export function predict(sessions, birthDate, now = new Date()) {
     time: onset,
     rangeStart: new Date(onset.getTime() - (isNight ? 20 : 15) * MIN),
     rangeEnd: new Date(onset.getTime() + (isNight ? 20 : 15) * MIN),
-    wakeWindow: ww.minutes,
+    wakeWindow: adjMinutes,
+    baseWakeWindow: ww.minutes,
+    adjustment, // 'short' | 'long' | null
     confidence: confidenceFrom(ww.samples),
     napNumber: isNight ? null : napsToday + 1,
     label: isNight ? 'Schlafenszeit (Nacht)' : `${napsToday + 1}. Nickerchen`,
@@ -323,3 +344,129 @@ export function fmtDuration(min) {
   if (h) return `${h} Std`;
   return `${m} Min`;
 }
+
+function sameDay(a, b) {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
+function durMin(s) {
+  return (new Date(s.end) - new Date(s.start)) / MIN;
+}
+
+// ---------------------------------------------------------------------------
+//  Tages-Übersicht: Schlaf heute vs. altersüblich.
+//  Nacht wird dem Tag zugerechnet, an dem sie ENDET (also heute = letzte Nacht).
+// ---------------------------------------------------------------------------
+export function daySummary(sessions, birthDate, now = new Date()) {
+  const prof = ageProfile(birthDate, now);
+  const todayNaps = sessions.filter((s) => s.type === 'nap' && s.end && sameDay(new Date(s.start), now));
+  const napMinutes = todayNaps.reduce((a, s) => a + durMin(s), 0);
+  const lastNight = sessions
+    .filter((s) => s.type === 'night' && s.end)
+    .sort((a, b) => new Date(b.end) - new Date(a.end))[0];
+  const nightMinutes = lastNight && sameDay(new Date(lastNight.end), now) ? durMin(lastNight) : 0;
+  return {
+    naps: todayNaps.length,
+    napMinutes: Math.round(napMinutes),
+    nightMinutes: Math.round(nightMinutes),
+    totalMinutes: Math.round(napMinutes + nightMinutes),
+    typical: {
+      naps: prof.naps,
+      napMinutes: prof.naps * prof.napDur,
+      nightMinutes: Math.round(prof.nightHrs * 60),
+      totalMinutes: Math.round(prof.naps * prof.napDur + prof.nightHrs * 60),
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+//  7-Tage-Trend: pro Kalendertag Nickerchen- und Nachtschlaf-Minuten.
+//  (Nacht dem Endtag/Morgen zugerechnet.) Für das kleine Balkendiagramm.
+// ---------------------------------------------------------------------------
+export function weeklyTrend(sessions, now = new Date(), days = 7) {
+  const wk = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
+  const out = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(now);
+    d.setDate(now.getDate() - i);
+    d.setHours(0, 0, 0, 0);
+    const naps = sessions.filter((s) => s.type === 'nap' && s.end && sameDay(new Date(s.start), d));
+    const napMin = naps.reduce((a, s) => a + durMin(s), 0);
+    const nightMin = sessions
+      .filter((s) => s.type === 'night' && s.end && sameDay(new Date(s.end), d))
+      .reduce((a, s) => a + durMin(s), 0);
+    out.push({
+      date: d,
+      label: wk[d.getDay()],
+      napMin: Math.round(napMin),
+      nightMin: Math.round(nightMin),
+      napCount: naps.length,
+    });
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+//  Prognose-Rückblick (Backtest): Für die letzten Schlaf-Beginne wird – nur mit
+//  den DAMALS verfügbaren Daten – vorhergesagt und mit dem tatsächlichen
+//  Einschlafen verglichen. Zeigt, wie treffsicher die App ist.
+// ---------------------------------------------------------------------------
+export function predictionReview(sessions, birthDate, now = new Date(), count = 8) {
+  const done = sessions.filter((s) => s.end).sort((a, b) => new Date(a.start) - new Date(b.start));
+  const results = [];
+  for (let i = 1; i < done.length; i++) {
+    const s = done[i];
+    if (s.type !== 'nap') continue; // Nickerchen sind planungsrelevant & stabiler
+    const onset = new Date(s.start);
+    if (onset > now || now - onset > 21 * 24 * HOUR) continue; // nur letzte ~3 Wochen
+    const lastWake = new Date(done[i - 1].end);
+    const gapMin = (onset - lastWake) / MIN;
+    if (gapMin <= 20 || gapMin > 12 * 60) continue; // ungültig / Zyklusgrenze
+    const before = done.filter((x) => new Date(x.start) < onset);
+    const pr = predict(before, birthDate, new Date(lastWake.getTime() + 60000));
+    if (!pr.prediction || pr.prediction.kind !== 'sleep') continue;
+    results.push({ onset, type: s.type, devMin: Math.round((onset - pr.prediction.time) / MIN) });
+  }
+  const recent = results.slice(-count);
+  if (recent.length < 3) return null;
+  const abs = recent.map((r) => Math.abs(r.devMin));
+  return {
+    items: recent,
+    count: recent.length,
+    avgAbs: Math.round(abs.reduce((a, b) => a + b, 0) / abs.length),
+    avgSigned: Math.round(recent.reduce((a, r) => a + r.devMin, 0) / recent.length),
+    within30: Math.round((100 * recent.filter((r) => Math.abs(r.devMin) <= 30).length) / recent.length),
+  };
+}
+
+// ---------------------------------------------------------------------------
+//  Schub-/Regressions-Erkennung: Ø Wachfenster der letzten ~3 Tage vs. der
+//  ~11 Tage davor. Große Änderungen deuten auf Wachstum/Entwicklung oder eine
+//  Schlafregression hin.
+// ---------------------------------------------------------------------------
+export function detectShift(sessions, now = new Date()) {
+  const cutRecent = new Date(now - 3 * 24 * HOUR);
+  const cutBase = new Date(now - 14 * 24 * HOUR);
+  const perCycle = buildCycles(sessions)
+    .filter((c) => c.morningWake)
+    .map((c) => {
+      const ws = [...c.wakeWindows, c.bedtimeWindow].filter((x) => x > 0);
+      return { date: c.morningWake, avg: ws.length ? ws.reduce((a, b) => a + b, 0) / ws.length : 0, naps: c.naps.length };
+    })
+    .filter((c) => c.avg > 0);
+  const recent = perCycle.filter((c) => c.date >= cutRecent);
+  const base = perCycle.filter((c) => c.date >= cutBase && c.date < cutRecent);
+  if (recent.length < 2 || base.length < 3) return { type: 'none' };
+  const mean = (a) => a.reduce((x, y) => x + y, 0) / a.length;
+  const rAvg = mean(recent.map((c) => c.avg));
+  const bAvg = mean(base.map((c) => c.avg));
+  const delta = (rAvg - bAvg) / bAvg;
+  const deltaMin = Math.round(rAvg - bAvg);
+  const rNaps = mean(recent.map((c) => c.naps));
+  const bNaps = mean(base.map((c) => c.naps));
+  if (delta >= 0.15) return { type: 'longer', deltaMin };
+  if (delta <= -0.15) return { type: 'shorter', deltaMin };
+  if (rNaps <= bNaps - 0.6) return { type: 'dropnap' };
+  return { type: 'none' };
+}
+
+
