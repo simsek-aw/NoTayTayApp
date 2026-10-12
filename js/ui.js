@@ -2,8 +2,29 @@
 //  UI — Rendering & Interaktion
 // ============================================================================
 import { store } from './store.js';
-import { predict, ageProfile, ageInDays, fmtDuration, daySummary, weeklyTrend, predictionReview, detectShift } from './engine.js';
+import { predict, ageProfile, ageInDays, daySummary, weeklyTrend, predictionReview, detectShift } from './engine.js';
 import * as notify from './notify.js';
+import { t, getLang, setLang, locale, wkShort, ageLabel } from './i18n.js';
+
+// Lokalisierte Dauer: "1 Std 23 Min" / "1 sa 23 dk"
+function dur(min) {
+  const h = Math.floor(min / 60);
+  const m = Math.round(min % 60);
+  const H = t('unit_h'); const M = t('unit_min');
+  if (h && m) return `${h} ${H} ${m} ${M}`;
+  if (h) return `${h} ${H}`;
+  return `${m} ${M}`;
+}
+
+// Statische Texte (data-i18n / -ph / -aria) in die aktuelle Sprache setzen
+function applyI18n() {
+  document.querySelectorAll('[data-i18n]').forEach((el) => { el.textContent = t(el.dataset.i18n); });
+  document.querySelectorAll('[data-i18n-ph]').forEach((el) => { el.placeholder = t(el.dataset.i18nPh); });
+  document.querySelectorAll('[data-i18n-aria]').forEach((el) => { el.setAttribute('aria-label', t(el.dataset.i18nAria)); });
+  const lb = $('lang-btn');
+  if (lb) lb.textContent = getLang() === 'de' ? 'TR' : 'DE';
+}
+
 
 const $ = (id) => document.getElementById(id);
 const pad = (n) => String(n).padStart(2, '0');
@@ -24,12 +45,12 @@ function elapsed(from, to = new Date()) {
 }
 function relDay(d) {
   const now = new Date();
-  const t = new Date(d);
+  const td = new Date(d);
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const diff = Math.floor((new Date(t.getFullYear(), t.getMonth(), t.getDate()) - startOfToday) / 86400000);
-  if (diff === 0) return 'Heute';
-  if (diff === -1) return 'Gestern';
-  return t.toLocaleDateString('de-DE', { weekday: 'short', day: 'numeric', month: 'short' });
+  const diff = Math.floor((new Date(td.getFullYear(), td.getMonth(), td.getDate()) - startOfToday) / 86400000);
+  if (diff === 0) return t('today');
+  if (diff === -1) return t('yesterday');
+  return td.toLocaleDateString(locale(), { weekday: 'short', day: 'numeric', month: 'short' });
 }
 
 let toastTimer = null;
@@ -90,13 +111,13 @@ function updateSyncUI(status, detail) {
   intro.hidden = false;
 
   const map = {
-    connecting: ['verbindet…', 'badge-warn'],
-    connected: ['verbunden', 'badge-ok'],
-    error: ['Fehler', 'badge-err'],
-    disconnected: ['aus', ''],
-    unavailable: ['n/v', ''],
+    connecting: [t('badge_connecting'), 'badge-warn'],
+    connected: [t('badge_connected'), 'badge-ok'],
+    error: [t('badge_error'), 'badge-err'],
+    disconnected: [t('off'), ''],
+    unavailable: [t('na'), ''],
   };
-  const [label, cls] = map[status] || ['aus', ''];
+  const [label, cls] = map[status] || [t('off'), ''];
   badge.textContent = label;
   badge.className = 'sync-badge ' + cls;
 
@@ -106,7 +127,7 @@ function updateSyncUI(status, detail) {
   if (isConn) {
     $('sync-code-shown').textContent = store.getFamilyCode() || '';
   }
-  if (status === 'error' && detail) toast('Sync-Fehler: ' + detail);
+  if (status === 'error' && detail) toast(t('t_sync_err') + ': ' + detail);
 }
 
 // Status der Erinnerungen im Einstellungen-Menü anzeigen
@@ -119,13 +140,13 @@ function updateNotifyUI() {
     unavailable.hidden = false;
     enableBtn.hidden = true;
     disableBtn.hidden = true;
-    badge.textContent = 'n/v';
+    badge.textContent = t('na');
     badge.className = 'sync-badge';
     return;
   }
   unavailable.hidden = true;
   const on = notify.notifyEnabled();
-  badge.textContent = on ? 'an' : 'aus';
+  badge.textContent = on ? t('on') : t('off');
   badge.className = 'sync-badge ' + (on ? 'badge-ok' : '');
   enableBtn.hidden = on;
   disableBtn.hidden = !on;
@@ -143,6 +164,7 @@ function toLocalInput(d) {
 // ---------------------------------------------------------------------------
 export function render() {
   const state = store.get();
+  applyI18n();
 
   // Kopfzeile
   $('baby-name').textContent = state.baby.name || 'Baby';
@@ -150,8 +172,8 @@ export function render() {
   if (days != null) {
     const prof = ageProfile(state.baby.birthDate);
     const weeks = Math.floor(days / 7);
-    const ageStr = days < 90 ? `${weeks} Wo. (${days} T.)` : `${Math.round(days / 30.44)} Mon.`;
-    $('baby-age').textContent = `${ageStr} · ${prof.label}`;
+    const ageStr = days < 90 ? t('age_wk', { w: weeks, d: days }) : t('age_mon', { n: Math.round(days / 30.44) });
+    $('baby-age').textContent = `${ageStr} · ${ageLabel(prof.label)}`;
   } else {
     $('baby-age').textContent = '';
   }
@@ -194,29 +216,29 @@ function buildReport() {
   const avgTotal = avg(complete.map((d) => d.napMin + d.nightMin));
   const rev = predictionReview(state.sessions, state.baby.birthDate, now);
 
-  const rows = week.map((d) => `<tr><td>${d.date.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' })}</td><td>${d.napCount}×</td><td>${d.napMin ? fmtDuration(d.napMin) : '–'}</td><td>${d.nightMin ? fmtDuration(d.nightMin) : '–'}</td><td>${(d.napMin + d.nightMin) ? fmtDuration(d.napMin + d.nightMin) : '–'}</td></tr>`).join('');
+  const rows = week.map((d) => `<tr><td>${d.date.toLocaleDateString(locale(), { weekday: 'short', day: '2-digit', month: '2-digit' })}</td><td>${d.napCount}×</td><td>${d.napMin ? dur(d.napMin) : '–'}</td><td>${d.nightMin ? dur(d.nightMin) : '–'}</td><td>${(d.napMin + d.nightMin) ? dur(d.napMin + d.nightMin) : '–'}</td></tr>`).join('');
 
-  const ageStr = days < 90 ? `${Math.floor(days / 7)} Wochen` : `${Math.round(days / 30.44)} Monate`;
+  const ageStr = days < 90 ? t('rp_age_wk', { n: Math.floor(days / 7) }) : t('rp_age_mon', { n: Math.round(days / 30.44) });
   let report = document.getElementById('report');
   if (!report) { report = document.createElement('div'); report.id = 'report'; document.body.appendChild(report); }
   report.innerHTML = `
     <div class="report-actions">
-      <button class="btn" id="report-print">🖨️ Drucken / als PDF</button>
-      <button class="btn" id="report-close">Schließen</button>
+      <button class="btn" id="report-print">${t('rp_print')}</button>
+      <button class="btn" id="report-close">${t('rp_close')}</button>
     </div>
-    <h1>Schlafbericht – ${escapeHtml(state.baby.name)}</h1>
-    <div class="rp-sub">Alter: ${ageStr} (geb. ${new Date(state.baby.birthDate).toLocaleDateString('de-DE')}) · Stand: ${now.toLocaleDateString('de-DE')} · Richtwert-Altersgruppe: ${prof.label}</div>
-    <h2>Durchschnitt (vollständige Tage, letzte 7)</h2>
+    <h1>${t('rp_title', { name: escapeHtml(state.baby.name) })}</h1>
+    <div class="rp-sub">${t('rp_sub', { age: ageStr, date: new Date(state.baby.birthDate).toLocaleDateString(locale()), today: now.toLocaleDateString(locale()), label: ageLabel(prof.label) })}</div>
+    <h2>${t('rp_avg')}</h2>
     <div class="rp-kpis">
-      <div class="rp-kpi"><b>${avgNaps}</b> Nickerchen / Tag</div>
-      <div class="rp-kpi"><b>${avgDay ? fmtDuration(avgDay) : '–'}</b> Tagschlaf / Tag</div>
-      <div class="rp-kpi"><b>${avgNight ? fmtDuration(avgNight) : '–'}</b> Nachtschlaf</div>
-      <div class="rp-kpi"><b>${avgTotal ? fmtDuration(avgTotal) : '–'}</b> Gesamtschlaf / Tag</div>
+      <div class="rp-kpi"><b>${avgNaps}</b> ${t('rp_k_naps')}</div>
+      <div class="rp-kpi"><b>${avgDay ? dur(avgDay) : '–'}</b> ${t('rp_k_day')}</div>
+      <div class="rp-kpi"><b>${avgNight ? dur(avgNight) : '–'}</b> ${t('rp_k_night')}</div>
+      <div class="rp-kpi"><b>${avgTotal ? dur(avgTotal) : '–'}</b> ${t('rp_k_total')}</div>
     </div>
-    <h2>Tagesübersicht (7 Tage)</h2>
-    <table><thead><tr><th>Tag</th><th>Nickerchen</th><th>Tagschlaf</th><th>Nacht</th><th>Gesamt</th></tr></thead><tbody>${rows}</tbody></table>
-    ${rev ? `<h2>Prognose-Treffsicherheit (Nickerchen)</h2><p>Ø Abweichung ±${rev.avgAbs} Min · ${rev.within30}% im ±30-Min-Fenster (letzte ${rev.count}).</p>` : ''}
-    <p style="margin-top:20px;font-size:11px;color:#888;">Erstellt mit Schlummer. Richtwerte dienen der Orientierung und ersetzen keine ärztliche Beratung.</p>
+    <h2>${t('rp_table')}</h2>
+    <table><thead><tr><th>${t('rp_c_day')}</th><th>${t('rp_c_naps')}</th><th>${t('rp_c_daysleep')}</th><th>${t('rp_c_night')}</th><th>${t('rp_c_total')}</th></tr></thead><tbody>${rows}</tbody></table>
+    ${rev ? `<h2>${t('rp_acc_title')}</h2><p>${t('rp_acc', { a: rev.avgAbs, p: rev.within30, n: rev.count })}</p>` : ''}
+    <p style="margin-top:20px;font-size:11px;color:#888;">${t('rp_foot')}</p>
   `;
   report.hidden = false;
   document.getElementById('report-print').onclick = () => window.print();
@@ -263,7 +285,7 @@ function renderDateStrip() {
   const strip = $('date-strip');
   strip.innerHTML = '';
   const today = startOfDayLocal(new Date());
-  const wk = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
+  const wk = wkShort();
   for (let i = 13; i >= 0; i--) {
     const d = new Date(today); d.setDate(today.getDate() - i);
     const btn = document.createElement('button');
@@ -352,16 +374,16 @@ function renderClockCenter(state, pred, m) {
     const s = selectedIcon;
     if (s.kind === 'nap' && !s.end) {
       center.dataset.mode = 'active'; center.dataset.start = new Date(s.start).toISOString();
-      setCenter('😴 Nickerchen läuft', elapsed(new Date(s.start)), `seit ${fmtClock(s.start)}`);
+      setCenter(t('nap_running'), elapsed(new Date(s.start)), t('since', { t: fmtClock(s.start) }));
     } else if (s.kind === 'nap') {
-      setCenter('😴 Nickerchen', `${fmtTime(s.start)}–${fmtTime(s.end)}`, fmtDuration(Math.round((new Date(s.end) - new Date(s.start)) / 60000)), true);
+      setCenter(t('c_nap'), `${fmtTime(s.start)}–${fmtTime(s.end)}`, dur(Math.round((new Date(s.end) - new Date(s.start)) / 60000)), true);
     } else if (s.kind === 'bed') {
-      if (s.end) setCenter('🌙 Nacht', `${fmtTime(s.start)}–${fmtTime(s.end)}`, fmtDuration(Math.round((new Date(s.end) - new Date(s.start)) / 60000)), true);
-      else setCenter('🌙 Schlafenszeit', fmtTime(s.time), 'Prognose');
+      if (s.end) setCenter(t('c_night'), `${fmtTime(s.start)}–${fmtTime(s.end)}`, dur(Math.round((new Date(s.end) - new Date(s.start)) / 60000)), true);
+      else setCenter(t('bedtime'), fmtTime(s.time), t('forecast'));
     } else if (s.kind === 'wake') {
-      setCenter('🌅 Aufwachen', fmtTime(s.time), '');
+      setCenter(t('c_wake'), fmtTime(s.time), '');
     } else {
-      setCenter('😴 Nickerchen', fmtTime(s.time), 'Prognose');
+      setCenter(t('c_nap'), fmtTime(s.time), t('forecast'));
     }
     return;
   }
@@ -369,27 +391,26 @@ function renderClockCenter(state, pred, m) {
   if (m.isToday) {
     if (pred.status === 'asleep') {
       center.dataset.mode = 'active'; center.dataset.start = new Date(pred.active.start).toISOString();
-      setCenter(pred.sleepType === 'night' ? '🌙 Schläft (Nacht)' : '😴 Schläft', elapsed(new Date(pred.active.start)),
-        pred.prediction ? `ca. bis ${fmtClock(pred.prediction.time)}` : '');
+      setCenter(pred.sleepType === 'night' ? t('sleeping_night') : t('sleeping_nap'), elapsed(new Date(pred.active.start)),
+        pred.prediction ? t('ca_until', { t: fmtClock(pred.prediction.time) }) : '');
     } else if (pred.prediction && pred.prediction.kind === 'sleep') {
       const p = pred.prediction;
       const stale = pred.lastWake && new Date(pred.lastWake) < startOfDayLocal(new Date());
       if (stale) {
-        // Neuer Tag, heute noch nichts getrackt -> freundlicher Hinweis statt "12h überfällig"
-        setCenter('☀️ Neuer Tag', '–', 'Noch nichts getrackt – unten starten');
+        setCenter(t('newday'), '–', t('newday_sub'));
       } else {
         center.dataset.mode = 'next'; center.dataset.target = p.time.toISOString();
-        setCenter(p.type === 'night' ? '🌙 Schlafenszeit' : '😴 Nächstes Nickerchen', fmtTime(p.time), '');
+        setCenter(p.type === 'night' ? t('bedtime') : t('next_nap'), fmtTime(p.time), '');
         updateHomeTick();
       }
     } else {
-      setCenter('☀️ Wach', '–', '');
+      setCenter(t('awake'), '–', '');
     }
   } else {
     const napMin = m.naps.filter((n) => n.end).reduce((a, n) => a + (new Date(n.end) - new Date(n.start)) / 60000, 0);
     const nightTxt = m.nightStart && m.nightStart.end
-      ? ` · Nacht ${fmtDuration(Math.round((new Date(m.nightStart.end) - new Date(m.nightStart.start)) / 60000))}` : '';
-    setCenter('Tagesschlaf', napMin ? fmtShort(Math.round(napMin)) : '–', `${m.naps.length} Nickerchen${nightTxt}`, true);
+      ? ` · ${t('night_d', { d: dur(Math.round((new Date(m.nightStart.end) - new Date(m.nightStart.start)) / 60000)) })}` : '';
+    setCenter(t('daysleep'), napMin ? fmtShort(Math.round(napMin)) : '–', `${t('naps_n', { n: m.naps.length })}${nightTxt}`, true);
   }
 }
 
@@ -408,62 +429,62 @@ function renderTracker(state, pred) {
     bar.className = 'timer-bar';
     bar.innerHTML = `
       <div class="tb-row">
-        <span>${isNight ? '🌙' : '😴'} ${isNight ? 'Nacht' : 'Nickerchen'} läuft</span>
+        <span>${isNight ? t('night_running') : t('nap_running2')}</span>
         <span class="tb-time" id="tb-time">${elapsed(start)}</span>
       </div>
       <div class="tb-track"><div class="tb-fill" id="tb-fill"></div></div>
-      <div class="tb-sub">seit ${fmtClock(start)}${target ? ` · ca. bis ${fmtClock(target)}` : ''}</div>`;
+      <div class="tb-sub">${t('since', { t: fmtClock(start) })}${target ? ` · ${t('ca_until', { t: fmtClock(target) })}` : ''}</div>`;
     el.appendChild(bar);
     el.dataset.start = start.toISOString();
     if (target) el.dataset.target = target.toISOString();
-    el.appendChild(bigBtn(isNight ? '🌅 Aufgewacht (Nacht beenden)' : '⏹ Nickerchen beenden', () => {
+    el.appendChild(bigBtn(isNight ? t('end_night') : t('end_nap'), () => {
       const s = store.stop(); vibrate(); render();
-      toast('Aufgewacht — gut geschlafen! 👶', () => { store.updateSession(s.id, { end: null }); render(); });
+      toast(t('t_woke'), () => { store.updateSession(s.id, { end: null }); render(); });
     }));
   } else {
-    el.appendChild(bigBtn('😴 Nickerchen starten', () => {
+    el.appendChild(bigBtn(t('start_nap'), () => {
       const s = store.start('nap'); vibrate(); render();
-      toast('Nickerchen gestartet', () => { store.removeSession(s.id); render(); });
+      toast(t('t_nap_started'), () => { store.removeSession(s.id); render(); });
     }));
     const night = document.createElement('button');
     night.className = 'btn btn-ghost btn-block';
-    night.textContent = '🌙 Schlafenszeit (Nacht) starten';
+    night.textContent = t('start_night');
     night.onclick = () => {
       const s = store.start('night'); vibrate(); render();
-      toast('Gute Nacht! 🌙', () => { store.removeSession(s.id); render(); });
+      toast(t('t_night'), () => { store.removeSession(s.id); render(); });
     };
     el.appendChild(night);
     el.appendChild(quickChips([10, 20, 30], (min) => {
       const s = store.start('nap', new Date(Date.now() - min * 60000)); vibrate(); render();
-      toast(`Nickerchen vor ${min} Min gestartet`, () => { store.removeSession(s.id); render(); });
-    }, 'eingeschlafen vor'));
+      toast(t('t_nap_ago', { m: min }), () => { store.removeSession(s.id); render(); });
+    }, (min) => t('chip_fell', { m: min })));
   }
 }
 
 function renderTodayList(state) {
   $('today-title').textContent = sameDayLocal(selectedDay, new Date())
-    ? 'Heute' : selectedDay.toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: '2-digit' });
+    ? t('today') : selectedDay.toLocaleDateString(locale(), { weekday: 'long', day: '2-digit', month: '2-digit' });
   const list = $('today-list');
   list.innerHTML = '';
   const items = state.sessions.filter((s) =>
     (s.type === 'nap' && sameDayLocal(new Date(s.start), selectedDay))
     || (s.type === 'night' && (sameDayLocal(new Date(s.start), selectedDay) || (s.end && sameDayLocal(new Date(s.end), selectedDay))))
   ).sort((a, b) => new Date(a.start) - new Date(b.start));
-  if (!items.length) { list.innerHTML = '<li class="today-empty">Noch nichts getrackt.</li>'; return; }
+  if (!items.length) { list.innerHTML = `<li class="today-empty">${t('today_empty')}</li>`; return; }
   for (const s of items) {
     const li = document.createElement('li');
     li.className = 'history-item';
     const icon = s.type === 'night' ? '🌙' : '😴';
-    const label = s.type === 'night' ? 'Nacht' : 'Nickerchen';
+    const label = s.type === 'night' ? t('night') : t('nap');
     let txt;
     if (s.end) {
       const mins = Math.round((new Date(s.end) - new Date(s.start)) / 60000);
-      txt = `${fmtTime(s.start)}–${fmtTime(s.end)} · ${fmtDuration(mins)}`;
-    } else txt = `${fmtTime(s.start)} · läuft …`;
+      txt = `${fmtTime(s.start)}–${fmtTime(s.end)} · ${dur(mins)}`;
+    } else txt = `${fmtTime(s.start)} · ${t('running')}`;
     li.innerHTML = `
       <span class="hi-icon">${icon}</span>
       <div class="hi-body"><div class="hi-title">${label}</div><div class="hi-sub">${txt}</div></div>
-      <button class="icon-btn hi-edit" aria-label="Bearbeiten">✎</button>`;
+      <button class="icon-btn hi-edit" aria-label="${t('aria_edit')}">✎</button>`;
     li.querySelector('.hi-edit').onclick = () => openManual(s);
     list.appendChild(li);
   }
@@ -486,8 +507,8 @@ function updateHomeTick() {
       $('cc-time').textContent = elapsed(new Date(center.dataset.start));
     } else if (mode === 'next' && center.dataset.target) {
       const diff = new Date(center.dataset.target) - new Date();
-      if (diff <= 0) { center.classList.add('overdue'); $('cc-sub').textContent = `⚠️ ${fmtDuration(Math.round(-diff / 60000))} überfällig`; }
-      else { center.classList.remove('overdue'); $('cc-sub').textContent = `in ${fmtDuration(Math.round(diff / 60000))}`; }
+      if (diff <= 0) { center.classList.add('overdue'); $('cc-sub').textContent = t('overdue', { d: dur(Math.round(-diff / 60000)) }); }
+      else { center.classList.remove('overdue'); $('cc-sub').textContent = t('in_t', { d: dur(Math.round(diff / 60000)) }); }
     }
   }
   const tr = $('tracker');
@@ -511,13 +532,13 @@ function bigBtn(label, onclick) {
   b.onclick = onclick;
   return b;
 }
-function quickChips(mins, handler, prefix) {
+function quickChips(mins, handler, labelFn) {
   const wrap = document.createElement('div');
   wrap.className = 'quick-chips';
   mins.forEach((m) => {
     const c = document.createElement('button');
     c.className = 'chip';
-    c.textContent = `${prefix} ${m} Min`;
+    c.textContent = labelFn(m);
     c.onclick = () => handler(m);
     wrap.appendChild(c);
   });
@@ -531,7 +552,8 @@ function quickChips(mins, handler, prefix) {
 function fmtShort(min) {
   const h = Math.floor(min / 60);
   const m = Math.round(min % 60);
-  return h ? (m ? `${h}:${pad(m)} Std` : `${h} Std`) : `${m} Min`;
+  const H = t('unit_h'); const M = t('unit_min');
+  return h ? (m ? `${h}:${pad(m)} ${H}` : `${h} ${H}`) : `${m} ${M}`;
 }
 function cmpClass(actual, typ, tol) {
   const t = tol == null ? Math.round(typ * 0.15) : tol;
@@ -546,15 +568,15 @@ function renderSummary(state) {
   const sum = daySummary(state.sessions, state.baby.birthDate);
   card.hidden = false;
   $('summary-tiles').innerHTML = [
-    tile(`${sum.naps}×`, 'Nickerchen', `typ. ${sum.typical.naps}×`, cmpClass(sum.naps, sum.typical.naps, 0)),
-    tile(fmtShort(sum.napMinutes), 'Tagschlaf', `typ. ${fmtShort(sum.typical.napMinutes)}`, cmpClass(sum.napMinutes, sum.typical.napMinutes)),
+    tile(`${sum.naps}×`, t('sum_naps'), t('typ', { x: `${sum.typical.naps}×` }), cmpClass(sum.naps, sum.typical.naps, 0)),
+    tile(fmtShort(sum.napMinutes), t('sum_day'), t('typ', { x: fmtShort(sum.typical.napMinutes) }), cmpClass(sum.napMinutes, sum.typical.napMinutes)),
     sum.nightMinutes
-      ? tile(fmtShort(sum.totalMinutes), 'Gesamt 24h', `typ. ${fmtShort(sum.typical.totalMinutes)}`, cmpClass(sum.totalMinutes, sum.typical.totalMinutes))
-      : tile('–', 'Gesamt 24h', 'Nacht fehlt', ''),
+      ? tile(fmtShort(sum.totalMinutes), t('sum_total'), t('typ', { x: fmtShort(sum.typical.totalMinutes) }), cmpClass(sum.totalMinutes, sum.typical.totalMinutes))
+      : tile('–', t('sum_total'), t('night_missing'), ''),
   ].join('');
   $('summary-hint').textContent = sum.nightMinutes
-    ? `Letzte Nacht: ${fmtDuration(sum.nightMinutes)}.`
-    : 'Letzte Nacht noch nicht erfasst.';
+    ? t('last_night', { d: dur(sum.nightMinutes) })
+    : t('last_night_none');
 }
 
 function renderTrends(state) {
@@ -566,19 +588,21 @@ function renderTrends(state) {
   const todayIdx = data.length - 1;
   const chart = $('trend-chart');
   chart.innerHTML = '';
+  const wk = wkShort();
   data.forEach((d, i) => {
     const total = d.napMin + d.nightMin;
     const barPx = Math.round((total / maxTotal) * 100);
     const col = document.createElement('div');
     col.className = 'tc-col' + (i === todayIdx ? ' is-today' : '');
     const totalTxt = total ? (total / 60).toFixed(1).replace('.', ',') : '';
+    const lbl = wk[d.date.getDay()];
     col.innerHTML = `
       <div class="tc-total">${totalTxt}</div>
-      <div class="tc-bar" style="height:${Math.max(2, barPx)}px" title="${d.label}: ${fmtDuration(total)} (Nacht ${fmtDuration(d.nightMin)}, Nickerchen ${fmtDuration(d.napMin)})">
+      <div class="tc-bar" style="height:${Math.max(2, barPx)}px" title="${lbl}: ${dur(total)} (${t('legend_night')} ${dur(d.nightMin)}, ${t('legend_nap')} ${dur(d.napMin)})">
         <div class="tc-seg seg-nap" style="height:${total ? (d.napMin / total) * 100 : 0}%"></div>
         <div class="tc-seg seg-night" style="height:${total ? (d.nightMin / total) * 100 : 0}%"></div>
       </div>
-      <div class="tc-lbl">${d.label}</div>`;
+      <div class="tc-lbl">${lbl}</div>`;
     chart.appendChild(col);
   });
   const recent = weeklyTrend(state.sessions, new Date(), 14).filter((d) => d.napCount > 0);
@@ -588,7 +612,7 @@ function renderTrends(state) {
   if (ones >= 2 && twos >= 2) {
     const avg = recent.reduce((a, d) => a + d.napCount, 0) / recent.length;
     hint.hidden = false;
-    hint.textContent = `👶 Miray ist im Übergang von 2 auf 1 Nickerchen (Ø ${avg.toFixed(1).replace('.', ',')}/Tag, ${ones}× ein, ${twos}× zwei).`;
+    hint.textContent = t('transition', { avg: avg.toFixed(1).replace('.', ','), o: ones, t: twos });
   } else {
     hint.hidden = true;
   }
@@ -598,9 +622,9 @@ function renderShift(state) {
   const el = $('shift-banner');
   const sh = detectShift(state.sessions);
   const map = {
-    longer: ['sh-longer', `📈 Wachfenster werden länger (Ø +${Math.abs(sh.deltaMin || 0)} Min) – Miray entwickelt sich weiter. Die Prognose zieht automatisch mit.`],
-    shorter: ['sh-shorter', `📉 Wachfenster zuletzt kürzer (Ø ${sh.deltaMin || 0} Min) – evtl. Schlafregression oder Übermüdung. Etwas früher hinlegen kann helfen.`],
-    dropnap: ['sh-dropnap', '🔄 Zuletzt weniger Nickerchen – vermutlich der Übergang von 2 auf 1.'],
+    longer: ['sh-longer', t('sh_longer', { d: Math.abs(sh.deltaMin || 0) })],
+    shorter: ['sh-shorter', t('sh_shorter', { d: sh.deltaMin || 0 })],
+    dropnap: ['sh-dropnap', t('sh_dropnap')],
   };
   if (sh.type !== 'none' && map[sh.type]) {
     el.hidden = false;
@@ -617,9 +641,9 @@ function renderReview(state) {
   if (!r) { card.hidden = true; return; }
   card.hidden = false;
   $('review-stats').innerHTML = [
-    tile(`±${r.avgAbs}`, 'Ø Abweichung (Min)', '', ''),
-    tile(`${r.within30}%`, 'im ±30-Min-Fenster', '', r.within30 >= 50 ? 'ok' : 'low'),
-    tile(`${r.avgSigned >= 0 ? '+' : ''}${r.avgSigned}`, 'Tendenz (Min)', r.avgSigned >= 0 ? 'später' : 'früher', ''),
+    tile(`±${r.avgAbs}`, t('rv_dev'), '', ''),
+    tile(`${r.within30}%`, t('rv_within'), '', r.within30 >= 50 ? 'ok' : 'low'),
+    tile(`${r.avgSigned >= 0 ? '+' : ''}${r.avgSigned}`, t('rv_tend'), r.avgSigned >= 0 ? t('later') : t('earlier'), ''),
   ].join('');
   const chart = $('review-chart');
   chart.innerHTML = '';
@@ -634,7 +658,7 @@ function renderReview(state) {
     col.appendChild(bar);
     chart.appendChild(col);
   });
-  $('review-hint').textContent = `Letzte ${r.count} Nickerchen: Vorhersage vs. tatsächlich. Oben = später als vorhergesagt (gelb), unten = früher (blau).`;
+  $('review-hint').textContent = t('rv_hint', { n: r.count });
 }
 
 function renderHeatmap(state) {
@@ -644,8 +668,9 @@ function renderHeatmap(state) {
   card.hidden = false;
   const grid = $('heat-grid');
   grid.innerHTML = '';
-  ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'].forEach((d) => {
-    const h = document.createElement('div'); h.className = 'heat-dow'; h.textContent = d; grid.appendChild(h);
+  const wk = wkShort();
+  [1, 2, 3, 4, 5, 6, 0].forEach((di) => {
+    const h = document.createElement('div'); h.className = 'heat-dow'; h.textContent = wk[di]; grid.appendChild(h);
   });
   const offset = (days[0].date.getDay() + 6) % 7; // Montag = 0
   for (let i = 0; i < offset; i++) {
@@ -657,11 +682,12 @@ function renderHeatmap(state) {
     const cell = document.createElement('div');
     cell.className = 'heat-cell h' + lvl;
     cell.textContent = d.date.getDate();
-    cell.title = `${d.date.toLocaleDateString('de-DE')}: ${total ? fmtDuration(total) : 'keine Daten'}`;
+    cell.title = `${d.date.toLocaleDateString(locale())}: ${total ? dur(total) : '–'}`;
     grid.appendChild(cell);
   });
   const colors = ['#3a2f6b', '#5243a0', '#6f5cc9', '#9f8dff'];
-  $('heat-legend').innerHTML = 'wenig ' + colors.map((c) => `<span class="hl-box" style="background:${c}"></span>`).join('') + ' viel · Gesamtschlaf/Tag';
+  const boxes = colors.map((c) => `<span class="hl-box" style="background:${c}"></span>`).join('');
+  $('heat-legend').innerHTML = t('heat_legend', { boxes });
 }
 
 function renderPlan(pred) {
@@ -678,15 +704,15 @@ function renderPlan(pred) {
       li.innerHTML = `
         <span class="tl-dot">😴</span>
         <div class="tl-body">
-          <div class="tl-title">${item.label}</div>
-          <div class="tl-sub">${fmtClock(item.onset)} – ${fmtClock(item.wake)} · ${fmtDuration(item.duration)}</div>
+          <div class="tl-title">${t('nap_n', { n: item.number })}</div>
+          <div class="tl-sub">${fmtClock(item.onset)} – ${fmtClock(item.wake)} · ${dur(item.duration)}</div>
         </div>`;
     } else {
       li.innerHTML = `
         <span class="tl-dot">🌙</span>
         <div class="tl-body">
-          <div class="tl-title">Schlafenszeit</div>
-          <div class="tl-sub">ca. ${fmtClock(item.onset)}</div>
+          <div class="tl-title">${t('plan_bed')}</div>
+          <div class="tl-sub">${t('ca_until', { t: fmtClock(item.onset) })}</div>
         </div>`;
     }
     list.appendChild(li);
@@ -714,13 +740,13 @@ function renderHistory() {
     li.className = 'history-item';
     const start = new Date(s.start);
     const icon = s.type === 'night' ? '🌙' : '😴';
-    const typeLabel = s.type === 'night' ? 'Nacht' : 'Nickerchen';
+    const typeLabel = s.type === 'night' ? t('night') : t('nap');
     let durTxt = '';
     if (s.end) {
       const mins = Math.round((new Date(s.end) - start) / 60000);
-      durTxt = `${fmtTime(start)}–${fmtTime(new Date(s.end))} · ${fmtDuration(mins)}`;
+      durTxt = `${fmtTime(start)}–${fmtTime(new Date(s.end))} · ${dur(mins)}`;
     } else {
-      durTxt = `${fmtTime(start)} · läuft …`;
+      durTxt = `${fmtTime(start)} · ${t('running')}`;
     }
     li.innerHTML = `
       <span class="hi-icon">${icon}</span>
@@ -728,7 +754,7 @@ function renderHistory() {
         <div class="hi-title">${typeLabel}</div>
         <div class="hi-sub">${durTxt}</div>
       </div>
-      <button class="icon-btn hi-edit" aria-label="Bearbeiten">✎</button>`;
+      <button class="icon-btn hi-edit" aria-label="${t('aria_edit')}">✎</button>`;
     li.querySelector('.hi-edit').onclick = () => openManual(s);
     list.appendChild(li);
   }
@@ -741,7 +767,7 @@ let editingId = null;
 
 function openManual(session) {
   editingId = session ? session.id : null;
-  $('manual-title').textContent = session ? 'Eintrag bearbeiten' : 'Eintrag hinzufügen';
+  $('manual-title').textContent = session ? t('entry_edit') : t('entry_new');
   $('man-type').value = session ? session.type : 'nap';
   $('man-start').value = toLocalInput(session ? session.start : new Date());
   $('man-end').value = session && session.end ? toLocalInput(session.end) : '';
@@ -777,40 +803,40 @@ export function bindEvents() {
   $('notify-enable').onclick = async () => {
     const ok = await notify.enableNotifications();
     updateNotifyUI();
-    toast(ok ? 'Erinnerungen aktiviert 🔔' : 'Benachrichtigungen wurden abgelehnt');
+    toast(ok ? t('t_notify_on') : t('t_notify_denied'));
     if (ok) render(); // sofort für die aktuelle Prognose planen
   };
   $('notify-disable').onclick = () => {
     notify.disableNotifications();
     updateNotifyUI();
-    toast('Erinnerungen ausgeschaltet');
+    toast(t('t_notify_off'));
   };
 
   // ---- Familien-Sync ----
   $('sync-gen').onclick = () => { $('sync-code').value = genFamilyCode(); };
   $('sync-connect').onclick = async () => {
     const code = ($('sync-code').value || '').trim().toUpperCase();
-    if (code.length < 6) { toast('Bitte einen gültigen Code eingeben (oder erzeugen)'); return; }
+    if (code.length < 6) { toast(t('t_code_invalid')); return; }
     updateSyncUI('connecting');
     const ok = await store.connectSync(code, (status, detail) => updateSyncUI(status, detail));
-    if (ok) { toast('Familien-Sync verbunden ✅'); render(); }
+    if (ok) { toast(t('t_connected')); render(); }
   };
   $('sync-copy').onclick = async () => {
     const code = store.getFamilyCode() || '';
-    try { await navigator.clipboard.writeText(code); toast('Code kopiert 📋'); }
-    catch { toast('Code: ' + code); }
+    try { await navigator.clipboard.writeText(code); toast(t('t_copied')); }
+    catch { toast(t('code_prefix') + ' ' + code); }
   };
   $('sync-disconnect').onclick = () => {
     store.disconnectSync();
     updateSyncUI('disconnected');
-    toast('Sync getrennt (Daten bleiben lokal erhalten)');
+    toast(t('t_disconnected'));
   };
   $('settings-close').onclick = () => $('settings').hidden = true;
 
   $('report-btn').onclick = () => { $('settings').hidden = true; buildReport(); };
 
   $('clear-btn').onclick = () => {
-    if (confirm('Live getrackte Einträge zurücksetzen und Mirays Startdaten neu laden?')) {
+    if (confirm(t('confirm_reset'))) {
       store.resetToSeed();
       $('settings').hidden = true;
       render();
@@ -823,8 +849,8 @@ export function bindEvents() {
     const type = $('man-type').value;
     const start = $('man-start').value;
     const end = $('man-end').value;
-    if (!start) { toast('Bitte Beginn angeben'); return; }
-    if (end && new Date(end) <= new Date(start)) { toast('Ende muss nach dem Beginn liegen'); return; }
+    if (!start) { toast(t('t_need_start')); return; }
+    if (end && new Date(end) <= new Date(start)) { toast(t('t_end_after')); return; }
     if (editingId) {
       store.updateSession(editingId, { type, start, end: end || null });
     } else {
@@ -832,10 +858,10 @@ export function bindEvents() {
     }
     closeManual();
     render();
-    toast('Gespeichert');
+    toast(t('saved'));
   };
   $('man-delete').onclick = () => {
-    if (editingId && confirm('Diesen Eintrag löschen?')) {
+    if (editingId && confirm(t('confirm_del'))) {
       store.removeSession(editingId);
       closeManual();
       render();
@@ -864,7 +890,7 @@ export function bindEvents() {
         exit = document.createElement('button');
         exit.id = 'dim-exit-btn';
         exit.className = 'dim-exit';
-        exit.textContent = '☀️ Nachtmodus beenden';
+        exit.textContent = t('dim_exit');
         exit.onclick = () => setDim(false);
         document.body.appendChild(exit);
       }
@@ -894,7 +920,7 @@ export function bindEvents() {
   window.addEventListener('beforeinstallprompt', (e) => {
     e.preventDefault();
     deferredPrompt = e;
-    showInstall('📲 Zum Startbildschirm hinzufügen für den App-Start.', true);
+    showInstall(t('install_text'), true);
   });
   $('install-btn').onclick = async () => {
     if (!deferredPrompt) return;
@@ -908,8 +934,14 @@ export function bindEvents() {
     $('install-banner').hidden = true;
   };
   if (/iphone|ipad|ipod/i.test(navigator.userAgent) && !standalone && !dismissed) {
-    showInstall('📲 Installieren: „Teilen" → „Zum Home-Bildschirm".', false);
+    showInstall(t('install_ios'), false);
   }
+
+  // ---- Sprache umschalten (DE/TR) ----
+  $('lang-btn').onclick = () => {
+    setLang(getLang() === 'de' ? 'tr' : 'de');
+    render();
+  };
 
   // Live-Timer & periodisches Neurendern der Vorhersagen
   setInterval(tickTimer, 1000);

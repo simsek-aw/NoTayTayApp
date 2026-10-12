@@ -1,6 +1,8 @@
 // ============================================================================
 //  Erinnerungen — lokale Push-Benachrichtigungen vor der nächsten Schlafphase
 // ----------------------------------------------------------------------------
+import { t } from './i18n.js';
+
 //  Plant eine Benachrichtigung 30 Minuten vor dem vorhergesagten Schlaf und
 //  eine zum Zeitpunkt selbst. Die Erinnerungen werden bei jeder Neuberechnung
 //  neu gesetzt (z. B. wenn sich die Prognose durch neue Einträge verschiebt).
@@ -14,7 +16,7 @@ const LEAD_MIN = 30; // Vorlaufzeit in Minuten
 let timers = [];
 
 const pad = (n) => String(n).padStart(2, '0');
-const fmtClock = (d) => `${pad(d.getHours())}:${pad(d.getMinutes())} Uhr`;
+const fmtClock = (d) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 
 export function notifySupported() {
   return typeof Notification !== 'undefined' && 'serviceWorker' in navigator;
@@ -33,7 +35,7 @@ export async function enableNotifications() {
   if (perm !== 'granted') perm = await Notification.requestPermission();
   const ok = perm === 'granted';
   try { localStorage.setItem(KEY, ok ? '1' : '0'); } catch { /* ignore */ }
-  if (ok) show('🔔 Erinnerungen aktiv', 'Du wirst 30 Minuten vor der nächsten Schlafphase erinnert.');
+  if (ok) show(t('ntf_active_title'), t('ntf_active_body'));
   return ok;
 }
 
@@ -68,20 +70,20 @@ export function schedule(prediction) {
   if (!notifyEnabled() || !prediction || prediction.kind !== 'sleep') return;
 
   const now = Date.now();
-  const t = prediction.time.getTime();
-  const what = prediction.type === 'night' ? 'Schlafenszeit 🌙' : `${prediction.napNumber}. Nickerchen 😴`;
+  const target = prediction.time.getTime();
+  const what = prediction.type === 'night' ? t('ntf_what_night') : t('ntf_what_nap', { n: prediction.napNumber });
   const lead = LEAD_MIN * 60 * 1000;
 
-  if (t - lead > now) {
+  if (target - lead > now) {
     timers.push(setTimeout(
-      () => show('😴 Bald müde', `In ${LEAD_MIN} Minuten: ${what} (ca. ${fmtClock(prediction.time)}).`),
-      t - lead - now,
+      () => show(t('ntf_soon_title'), t('ntf_soon_body', { min: LEAD_MIN, what, t: fmtClock(prediction.time) })),
+      target - lead - now,
     ));
   }
-  if (t > now) {
+  if (target > now) {
     timers.push(setTimeout(
-      () => show('🌙 Zeit zum Schlafen', `${what} — jetzt ist ein gutes Zeitfenster.`),
-      t - now,
+      () => show(t('ntf_now_title'), t('ntf_now_body', { what })),
+      target - now,
     ));
   }
 }
